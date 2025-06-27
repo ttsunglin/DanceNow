@@ -20,6 +20,54 @@
     <name>Fiji ViewMover</name>
     <description>A Fiji plugin to quickly navigate to specific X,Y,Z,T coordinates while preserving zoom level</description>
     <url>https://github.com/ttl/Fiji_ViewMover</url>
+    <inceptionYear>2025</inceptionYear>
+
+    <organization>
+        <name>TTL</name>
+    </organization>
+
+    <licenses>
+        <license>
+            <name>GNU General Public License v3+</name>
+            <url>https://www.gnu.org/licenses/gpl-3.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>ttl</id>
+            <name>TTL</name>
+        </developer>
+    </developers>
+
+    <contributors>
+        <contributor>
+            <name>TTL</name>
+        </contributor>
+    </contributors>
+
+    <mailingLists>
+        <mailingList>
+            <name>None</name>
+        </mailingList>
+    </mailingLists>
+
+    <scm>
+        <connection>scm:git:https://github.com/ttl/Fiji_ViewMover</connection>
+        <developerConnection>scm:git:git@github.com:ttl/Fiji_ViewMover</developerConnection>
+        <tag>HEAD</tag>
+        <url>https://github.com/ttl/Fiji_ViewMover</url>
+    </scm>
+
+    <issueManagement>
+        <system>GitHub Issues</system>
+        <url>https://github.com/ttl/Fiji_ViewMover/issues</url>
+    </issueManagement>
+
+    <ciManagement>
+        <system>None</system>
+    </ciManagement>
 
     <properties>
         <package-name>com.github.ttl.viewmover</package-name>
