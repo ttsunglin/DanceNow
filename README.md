@@ -56,6 +56,3 @@ mvn clean package
 
 The compiled plugin will be available as `fiji-dancenow-1.0.0-SNAPSHOT.jar` in the `target/` directory.
 
-## License
-
-This project is licensed under the GNU General Public License v3+ - see the [LICENSE](https://www.gnu.org/licenses/gpl-3.0.txt) for details.
