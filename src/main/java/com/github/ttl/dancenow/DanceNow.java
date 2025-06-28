@@ -1,4 +1,4 @@
-package com.github.ttl.viewmover;
+package com.github.ttl.dancenow;
 
 import ij.IJ;
 import ij.ImagePlus;
@@ -14,29 +14,29 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 /**
- * ViewMover plugin for Fiji/ImageJ
+ * DanceNow plugin for Fiji/ImageJ
  * Provides a persistent window for quick navigation to specific X,Y,Z,T coordinates while preserving zoom level
  */
-public class ViewMover implements PlugIn {
+public class DanceNow implements PlugIn {
     
-    private static ViewMoverWindow window;
+    private static DanceNowWindow window;
     
     @Override
     public void run(String arg) {
         if (window == null || !window.isDisplayable()) {
-            window = new ViewMoverWindow();
+            window = new DanceNowWindow();
         }
         window.setVisible(true);
         window.toFront();
     }
     
-    private static class ViewMoverWindow extends JFrame {
+    private static class DanceNowWindow extends JFrame {
         private JTextField xField, yField, zField, tField;
         private JLabel statusLabel, currentPosLabel;
         private JButton goButton;
         private Timer updateTimer;
         
-        public ViewMoverWindow() {
+        public DanceNowWindow() {
             initializeWindow();
             createComponents();
             layoutComponents();
@@ -45,7 +45,7 @@ public class ViewMover implements PlugIn {
         }
         
         private void initializeWindow() {
-            setTitle("ViewMover");
+            setTitle("DanceNow");
             setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
             setAlwaysOnTop(true);
             setResizable(false);

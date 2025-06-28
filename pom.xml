@@ -13,11 +13,11 @@
     </parent>
 
     <groupId>com.github.ttl</groupId>
-    <artifactId>fiji-viewmover</artifactId>
+    <artifactId>fiji-dancenow</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
-    <name>Fiji ViewMover</name>
+    <name>Fiji DanceNow</name>
     <description>A Fiji plugin to quickly navigate to specific X,Y,Z,T coordinates while preserving zoom level</description>
     <url>https://github.com/ttl/Fiji_ViewMover</url>
     <inceptionYear>2025</inceptionYear>
@@ -70,8 +70,8 @@
     </ciManagement>
 
     <properties>
-        <package-name>com.github.ttl.viewmover</package-name>
-        <main-class>com.github.ttl.viewmover.ViewMover</main-class>
+        <package-name>com.github.ttl.dancenow</package-name>
+        <main-class>com.github.ttl.dancenow.DanceNow</main-class>
         <license.licenseName>gpl_v3</license.licenseName>
         <license.copyrightOwners>TTL</license.copyrightOwners>
     </properties>
