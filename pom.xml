@@ -92,6 +92,7 @@
     </dependencies>
 
     <build>
+        <finalName>DanceNow</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
