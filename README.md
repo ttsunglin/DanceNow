@@ -15,15 +15,8 @@ A Fiji/ImageJ plugin that provides a persistent navigation window for quickly ju
 
 ## Installation
 
-### Option 1: Build from Source
-1. Clone this repository
-2. Build with Maven: `mvn clean package`
-3. Copy the generated JAR file from `target/` to your Fiji `plugins/` directory
-4. Restart Fiji
-
-### Option 2: Manual Installation
-1. Download the compiled JAR file from releases
-2. Place it in your Fiji `plugins/` directory
+1. Download the compiled `traget/DanceNow.jar` JAR file from releases
+2. Place it in your Fiji `plugins/EveryBody` directory
 3. Restart Fiji
 
 ## Usage
