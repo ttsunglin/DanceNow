@@ -8,10 +8,19 @@ import ij.gui.ImageWindow;
 import ij.gui.ImageCanvas;
 
 import javax.swing.*;
+import javax.swing.table.*;
+import javax.swing.event.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.ArrayList;
+import java.util.List;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.FileReader;
+import java.io.BufferedReader;
+import java.io.IOException;
 
 /**
  * DanceNow plugin for Fiji/ImageJ
@@ -33,10 +42,31 @@ public class DanceNow implements PlugIn {
     private static class DanceNowWindow extends JFrame {
         private JTextField xField, yField, zField, tField;
         private JLabel statusLabel, currentPosLabel;
-        private JButton goButton;
+        private JButton goButton, addHereButton, nextButton, backButton, removeButton, exportButton, loadButton;
         private Timer updateTimer;
+        private JTable positionTable;
+        private DefaultTableModel tableModel;
+        private List<Position> positions;
+        private int currentPositionIndex = -1;
+        
+        private static class Position {
+            int x, y, z, t;
+            
+            Position(int x, int y, int z, int t) {
+                this.x = x;
+                this.y = y;
+                this.z = z;
+                this.t = t;
+            }
+            
+            @Override
+            public String toString() {
+                return String.format("%d,%d,%d,%d", x, y, z, t);
+            }
+        }
         
         public DanceNowWindow() {
+            positions = new ArrayList<>();
             initializeWindow();
             createComponents();
             layoutComponents();
@@ -48,7 +78,7 @@ public class DanceNow implements PlugIn {
             setTitle("DanceNow");
             setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
             setAlwaysOnTop(true);
-            setResizable(false);
+            setResizable(true);
         }
         
         private void createComponents() {
@@ -58,6 +88,13 @@ public class DanceNow implements PlugIn {
             tField = new JTextField(6);
             
             goButton = new JButton("Go");
+            addHereButton = new JButton("Add here");
+            nextButton = new JButton("Next>");
+            backButton = new JButton("<Back");
+            removeButton = new JButton("Remove");
+            exportButton = new JButton("Export");
+            loadButton = new JButton("Load");
+            
             statusLabel = new JLabel("No image open");
             currentPosLabel = new JLabel("Current: --");
             
@@ -67,12 +104,30 @@ public class DanceNow implements PlugIn {
             yField.setFont(fieldFont);
             zField.setFont(fieldFont);
             tField.setFont(fieldFont);
+            
+            // Create table for positions
+            String[] columnNames = {"X,Y,Z,T"};
+            tableModel = new DefaultTableModel(columnNames, 0) {
+                @Override
+                public boolean isCellEditable(int row, int column) {
+                    return true;
+                }
+            };
+            positionTable = new JTable(tableModel);
+            positionTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+            positionTable.setFont(fieldFont);
         }
         
         private void layoutComponents() {
             setLayout(new BorderLayout());
             
-            // Main input panel
+            // Main panel
+            JPanel mainPanel = new JPanel(new BorderLayout());
+            
+            // Top panel with input fields
+            JPanel topPanel = new JPanel(new BorderLayout());
+            
+            // Input panel
             JPanel inputPanel = new JPanel(new GridBagLayout());
             GridBagConstraints gbc = new GridBagConstraints();
             gbc.insets = new Insets(3, 3, 3, 3);
@@ -100,8 +155,32 @@ public class DanceNow implements PlugIn {
             inputPanel.add(tField, gbc);
             gbc.gridx = 5;
             inputPanel.add(goButton, gbc);
+            gbc.gridx = 6;
+            inputPanel.add(addHereButton, gbc);
             
-            add(inputPanel, BorderLayout.CENTER);
+            topPanel.add(inputPanel, BorderLayout.CENTER);
+            
+            // Navigation buttons panel
+            JPanel navPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+            navPanel.add(backButton);
+            navPanel.add(nextButton);
+            navPanel.add(removeButton);
+            navPanel.add(exportButton);
+            navPanel.add(loadButton);
+            topPanel.add(navPanel, BorderLayout.SOUTH);
+            
+            mainPanel.add(topPanel, BorderLayout.NORTH);
+            
+            // Position list panel
+            JPanel listPanel = new JPanel(new BorderLayout());
+            listPanel.setBorder(BorderFactory.createTitledBorder("Position List"));
+            JScrollPane scrollPane = new JScrollPane(positionTable);
+            scrollPane.setPreferredSize(new Dimension(300, 150));
+            listPanel.add(scrollPane, BorderLayout.CENTER);
+            
+            mainPanel.add(listPanel, BorderLayout.CENTER);
+            
+            add(mainPanel, BorderLayout.CENTER);
             
             // Status panel
             JPanel statusPanel = new JPanel(new BorderLayout());
@@ -117,6 +196,38 @@ public class DanceNow implements PlugIn {
         private void setupEventHandlers() {
             // Go button action
             goButton.addActionListener(e -> navigateToPosition());
+            
+            // Add here button action
+            addHereButton.addActionListener(e -> addCurrentPosition());
+            
+            // Next button action
+            nextButton.addActionListener(e -> navigateToNextPosition());
+            
+            // Back button action
+            backButton.addActionListener(e -> navigateToPreviousPosition());
+            
+            // Remove button action
+            removeButton.addActionListener(e -> removeSelectedPosition());
+            
+            // Export button action
+            exportButton.addActionListener(e -> exportPositions());
+            
+            // Load button action
+            loadButton.addActionListener(e -> loadPositions());
+            
+            // Table selection listener
+            positionTable.getSelectionModel().addListSelectionListener(e -> {
+                if (!e.getValueIsAdjusting()) {
+                    updateFieldsFromSelectedRow();
+                }
+            });
+            
+            // Table edit listener
+            tableModel.addTableModelListener(e -> {
+                if (e.getType() == TableModelEvent.UPDATE) {
+                    updatePositionsFromTable();
+                }
+            });
             
             // Enter key in any field triggers navigation
             KeyAdapter enterKeyHandler = new KeyAdapter() {
@@ -248,6 +359,204 @@ public class DanceNow implements PlugIn {
             
             // Update the display
             imp.updateAndDraw();
+        }
+        
+        private void addCurrentPosition() {
+            ImagePlus imp = WindowManager.getCurrentImage();
+            if (imp == null) {
+                statusLabel.setText("No image open");
+                return;
+            }
+            
+            ImageWindow win = imp.getWindow();
+            if (win != null && win.getCanvas() != null) {
+                ImageCanvas canvas = win.getCanvas();
+                Rectangle srcRect = canvas.getSrcRect();
+                int centerX = srcRect.x + srcRect.width / 2;
+                int centerY = srcRect.y + srcRect.height / 2;
+                
+                Position pos = new Position(centerX, centerY, imp.getZ(), imp.getT());
+                positions.add(pos);
+                tableModel.addRow(new Object[]{pos.toString()});
+                
+                statusLabel.setText("Added position: " + pos.toString());
+            }
+        }
+        
+        private void navigateToNextPosition() {
+            if (positions.isEmpty()) {
+                statusLabel.setText("No positions in list");
+                return;
+            }
+            
+            currentPositionIndex++;
+            if (currentPositionIndex >= positions.size()) {
+                currentPositionIndex = 0;
+            }
+            
+            positionTable.setRowSelectionInterval(currentPositionIndex, currentPositionIndex);
+            Position pos = positions.get(currentPositionIndex);
+            navigateToPosition(pos);
+        }
+        
+        private void navigateToPreviousPosition() {
+            if (positions.isEmpty()) {
+                statusLabel.setText("No positions in list");
+                return;
+            }
+            
+            currentPositionIndex--;
+            if (currentPositionIndex < 0) {
+                currentPositionIndex = positions.size() - 1;
+            }
+            
+            positionTable.setRowSelectionInterval(currentPositionIndex, currentPositionIndex);
+            Position pos = positions.get(currentPositionIndex);
+            navigateToPosition(pos);
+        }
+        
+        private void navigateToPosition(Position pos) {
+            ImagePlus imp = WindowManager.getCurrentImage();
+            if (imp == null) return;
+            
+            navigateToPosition(imp, pos.x, pos.y, pos.z, pos.t);
+            statusLabel.setText("Moved to: " + pos.toString());
+        }
+        
+        private void updateFieldsFromSelectedRow() {
+            int selectedRow = positionTable.getSelectedRow();
+            if (selectedRow >= 0 && selectedRow < positions.size()) {
+                currentPositionIndex = selectedRow;
+                Position pos = positions.get(selectedRow);
+                xField.setText(String.valueOf(pos.x));
+                yField.setText(String.valueOf(pos.y));
+                zField.setText(String.valueOf(pos.z));
+                tField.setText(String.valueOf(pos.t));
+            }
+        }
+        
+        private void updatePositionsFromTable() {
+            positions.clear();
+            for (int i = 0; i < tableModel.getRowCount(); i++) {
+                String value = (String) tableModel.getValueAt(i, 0);
+                try {
+                    String[] parts = value.split(",");
+                    if (parts.length == 4) {
+                        int x = Integer.parseInt(parts[0].trim());
+                        int y = Integer.parseInt(parts[1].trim());
+                        int z = Integer.parseInt(parts[2].trim());
+                        int t = Integer.parseInt(parts[3].trim());
+                        positions.add(new Position(x, y, z, t));
+                    }
+                } catch (NumberFormatException e) {
+                    statusLabel.setText("Invalid position format at row " + (i + 1));
+                }
+            }
+        }
+        
+        private void removeSelectedPosition() {
+            int selectedRow = positionTable.getSelectedRow();
+            if (selectedRow >= 0 && selectedRow < positions.size()) {
+                positions.remove(selectedRow);
+                tableModel.removeRow(selectedRow);
+                
+                // Update current position index if needed
+                if (currentPositionIndex >= positions.size()) {
+                    currentPositionIndex = positions.size() - 1;
+                }
+                
+                statusLabel.setText("Removed position at row " + (selectedRow + 1));
+            } else {
+                statusLabel.setText("Please select a position to remove");
+            }
+        }
+        
+        private void exportPositions() {
+            if (positions.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "No positions to export", "Export", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            
+            JFileChooser fileChooser = new JFileChooser();
+            fileChooser.setSelectedFile(new File("positions.txt"));
+            int result = fileChooser.showSaveDialog(this);
+            
+            if (result == JFileChooser.APPROVE_OPTION) {
+                File file = fileChooser.getSelectedFile();
+                try (FileWriter writer = new FileWriter(file)) {
+                    for (Position pos : positions) {
+                        writer.write(pos.toString() + "\n");
+                    }
+                    JOptionPane.showMessageDialog(this, 
+                        "Exported " + positions.size() + " positions to " + file.getName(),
+                        "Export Successful", 
+                        JOptionPane.INFORMATION_MESSAGE);
+                } catch (IOException e) {
+                    JOptionPane.showMessageDialog(this, 
+                        "Error exporting positions: " + e.getMessage(),
+                        "Export Error", 
+                        JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }
+        
+        private void loadPositions() {
+            JFileChooser fileChooser = new JFileChooser();
+            fileChooser.setSelectedFile(new File("positions.txt"));
+            int result = fileChooser.showOpenDialog(this);
+            
+            if (result == JFileChooser.APPROVE_OPTION) {
+                File file = fileChooser.getSelectedFile();
+                try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+                    // Clear existing positions
+                    positions.clear();
+                    tableModel.setRowCount(0);
+                    
+                    String line;
+                    int lineNumber = 0;
+                    while ((line = reader.readLine()) != null) {
+                        lineNumber++;
+                        line = line.trim();
+                        if (!line.isEmpty()) {
+                            try {
+                                String[] parts = line.split(",");
+                                if (parts.length == 4) {
+                                    int x = Integer.parseInt(parts[0].trim());
+                                    int y = Integer.parseInt(parts[1].trim());
+                                    int z = Integer.parseInt(parts[2].trim());
+                                    int t = Integer.parseInt(parts[3].trim());
+                                    Position pos = new Position(x, y, z, t);
+                                    positions.add(pos);
+                                    tableModel.addRow(new Object[]{pos.toString()});
+                                } else {
+                                    JOptionPane.showMessageDialog(this,
+                                        "Invalid format at line " + lineNumber + ": " + line,
+                                        "Load Warning",
+                                        JOptionPane.WARNING_MESSAGE);
+                                }
+                            } catch (NumberFormatException e) {
+                                JOptionPane.showMessageDialog(this,
+                                    "Invalid number format at line " + lineNumber + ": " + line,
+                                    "Load Warning",
+                                    JOptionPane.WARNING_MESSAGE);
+                            }
+                        }
+                    }
+                    
+                    JOptionPane.showMessageDialog(this, 
+                        "Loaded " + positions.size() + " positions from " + file.getName(),
+                        "Load Successful", 
+                        JOptionPane.INFORMATION_MESSAGE);
+                    
+                    currentPositionIndex = -1;
+                    
+                } catch (IOException e) {
+                    JOptionPane.showMessageDialog(this, 
+                        "Error loading positions: " + e.getMessage(),
+                        "Load Error", 
+                        JOptionPane.ERROR_MESSAGE);
+                }
+            }
         }
         
         @Override
