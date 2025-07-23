@@ -42,7 +42,7 @@ public class DanceNow implements PlugIn {
     private static class DanceNowWindow extends JFrame {
         private JTextField xField, yField, zField, tField;
         private JLabel statusLabel, currentPosLabel;
-        private JButton goButton, addHereButton, nextButton, backButton, removeButton, exportButton, loadButton;
+        private JButton goButton, addHereButton, nextButton, backButton, removeButton, exportButton, loadButton, bulkAddButton;
         private Timer updateTimer;
         private JTable positionTable;
         private DefaultTableModel tableModel;
@@ -94,6 +94,7 @@ public class DanceNow implements PlugIn {
             removeButton = new JButton("Remove");
             exportButton = new JButton("Export");
             loadButton = new JButton("Load");
+            bulkAddButton = new JButton("Bulk Add");
             
             statusLabel = new JLabel("No image open");
             currentPosLabel = new JLabel("Current: --");
@@ -167,6 +168,7 @@ public class DanceNow implements PlugIn {
             navPanel.add(removeButton);
             navPanel.add(exportButton);
             navPanel.add(loadButton);
+            navPanel.add(bulkAddButton);
             topPanel.add(navPanel, BorderLayout.SOUTH);
             
             mainPanel.add(topPanel, BorderLayout.NORTH);
@@ -214,6 +216,9 @@ public class DanceNow implements PlugIn {
             
             // Load button action
             loadButton.addActionListener(e -> loadPositions());
+            
+            // Bulk add button action
+            bulkAddButton.addActionListener(e -> showBulkAddDialog());
             
             // Table selection listener
             positionTable.getSelectionModel().addListSelectionListener(e -> {
@@ -423,6 +428,74 @@ public class DanceNow implements PlugIn {
             statusLabel.setText("Moved to: " + pos.toString());
         }
         
+        private void showBulkAddDialog() {
+            // Create a dialog with a text area for bulk input
+            JTextArea textArea = new JTextArea(10, 40);
+            textArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+            JScrollPane scrollPane = new JScrollPane(textArea);
+            
+            JPanel panel = new JPanel(new BorderLayout());
+            panel.add(new JLabel("Paste positions (one per line, format: X Y Z T or X,Y,Z,T or X\tY\tZ\tT):"), BorderLayout.NORTH);
+            panel.add(scrollPane, BorderLayout.CENTER);
+            
+            int result = JOptionPane.showConfirmDialog(this, panel, "Bulk Add Positions", 
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            
+            if (result == JOptionPane.OK_OPTION) {
+                String text = textArea.getText();
+                if (!text.trim().isEmpty()) {
+                    parseBulkPositions(text);
+                }
+            }
+        }
+        
+        private void parseBulkPositions(String text) {
+            String[] lines = text.split("\n");
+            int addedCount = 0;
+            int errorCount = 0;
+            
+            for (int i = 0; i < lines.length; i++) {
+                String line = lines[i].trim();
+                if (!line.isEmpty()) {
+                    try {
+                        // Split by comma, space, or tab
+                        String[] parts = line.split("[,\\s\\t]+");
+                        if (parts.length == 4) {
+                            int x = Integer.parseInt(parts[0].trim());
+                            int y = Integer.parseInt(parts[1].trim());
+                            int z = Integer.parseInt(parts[2].trim());
+                            int t = Integer.parseInt(parts[3].trim());
+                            
+                            // Validate coordinates
+                            ImagePlus imp = WindowManager.getCurrentImage();
+                            if (imp != null) {
+                                if (x < 1 || x > imp.getWidth() || y < 1 || y > imp.getHeight() ||
+                                    z < 1 || z > imp.getNSlices() || t < 1 || t > imp.getNFrames()) {
+                                    errorCount++;
+                                    continue;
+                                }
+                            }
+                            
+                            Position pos = new Position(x, y, z, t);
+                            positions.add(pos);
+                            tableModel.addRow(new Object[]{pos.toString()});
+                            addedCount++;
+                        } else {
+                            errorCount++;
+                        }
+                    } catch (NumberFormatException e) {
+                        errorCount++;
+                    }
+                }
+            }
+            
+            String message = "Added " + addedCount + " positions.";
+            if (errorCount > 0) {
+                message += " " + errorCount + " lines had errors and were skipped.";
+            }
+            statusLabel.setText(message);
+        }
+        
         private void updateFieldsFromSelectedRow() {
             int selectedRow = positionTable.getSelectedRow();
             if (selectedRow >= 0 && selectedRow < positions.size()) {
@@ -519,7 +592,8 @@ public class DanceNow implements PlugIn {
                         line = line.trim();
                         if (!line.isEmpty()) {
                             try {
-                                String[] parts = line.split(",");
+                                // Split by comma, space, or tab
+                                String[] parts = line.split("[,\\s\\t]+");
                                 if (parts.length == 4) {
                                     int x = Integer.parseInt(parts[0].trim());
                                     int y = Integer.parseInt(parts[1].trim());

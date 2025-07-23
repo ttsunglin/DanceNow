@@ -7,6 +7,7 @@ A Fiji/ImageJ plugin that provides a persistent navigation window for quickly ju
 - **Persistent Navigation Window**: A floating, always-on-top window that stays open for repeated use
 - **Real-time Position Updates**: Shows your current view center and image information
 - **Position List Management**: Save, edit, and navigate through multiple positions
+- **Bulk Import from Excel**: Copy and paste multiple positions directly from spreadsheets
 - **Quick Navigation**: Navigate to any X,Y,Z,T coordinate with a single click or Enter key
 - **Zoom Preservation**: Maintains your current zoom level during navigation
 - **Input Validation**: Prevents out-of-bounds coordinates with immediate feedback
@@ -39,6 +40,7 @@ A Fiji/ImageJ plugin that provides a persistent navigation window for quickly ju
 
 #### Adding Positions
 - Click **"Add here"** to add the current view center position to the list
+- Click **"Bulk Add"** to paste multiple positions from Excel or other sources
 - Positions are displayed in X,Y,Z,T format (e.g., "512,384,1,1")
 - You can manually edit positions directly in the list
 
@@ -52,6 +54,11 @@ A Fiji/ImageJ plugin that provides a persistent navigation window for quickly ju
 - Select a position and click **"Remove"** to delete it from the list
 - Click **"Export"** to save all positions to a text file
 - Click **"Load"** to import positions from a previously saved text file
+- Click **"Bulk Add"** to paste multiple positions at once:
+  - Opens a dialog where you can paste positions from Excel or other sources
+  - Supports multiple delimiters: comma, space, or tab
+  - Perfect for copying data directly from spreadsheets
+  - Format: One position per line (e.g., `100 200 1 1` or `100,200,1,1` or `100→200→1→1`)
 
 ### Features in Detail
 
@@ -61,6 +68,7 @@ A Fiji/ImageJ plugin that provides a persistent navigation window for quickly ju
 - **Boundary Checking**: Automatically validates coordinates against image dimensions
 - **Multi-dimensional Support**: Works with 2D, 3D (Z-stacks), and 4D (time series) images
 - **Editable Position List**: Double-click any position in the list to edit it directly
+- **Flexible Import Format**: Accepts comma, space, or tab-separated values for easy Excel integration
 - **Position File Format**: Simple text format with one position per line (X,Y,Z,T)
 
 ## Requirements
@@ -76,16 +84,32 @@ mvn clean package
 
 The compiled plugin will be available as `DanceNow.jar` in the `target/` directory.
 
-## Example Position File Format
+## Position File Format & Excel Integration
 
-When exporting positions, the plugin creates a simple text file with one position per line:
+### File Format
+When exporting or importing positions, the plugin supports flexible formatting with one position per line:
 
 ```
 512,384,1,1
-1024,768,5,1
-256,256,10,3
+1024 768 5 1
+256	256	10	3
 800,600,15,5
 ```
 
-Each line represents X,Y,Z,T coordinates separated by commas. This format can be edited in any text editor and imported back into the plugin.
+### Supported Delimiters
+Each line represents X,Y,Z,T coordinates. The plugin accepts multiple delimiters:
+- **Commas**: `512,384,1,1`
+- **Spaces**: `512 384 1 1`
+- **Tabs**: `512	384	1	1` (Excel default)
+- **Mixed**: `512,384 1	1` (any combination works)
+
+### Excel Integration
+To import positions from Excel:
+1. Arrange your data in 4 columns: X, Y, Z, T
+2. Select and copy the cells (Ctrl+C/Cmd+C)
+3. Click "Bulk Add" in DanceNow
+4. Paste (Ctrl+V/Cmd+V) into the dialog
+5. Click OK to import all positions
+
+This flexibility makes it seamless to work with position data from spreadsheets, analysis software, or manual entry.
 
