@@ -48,6 +48,7 @@ public class DanceNow implements PlugIn {
         private DefaultTableModel tableModel;
         private List<Position> positions;
         private int currentPositionIndex = -1;
+        private boolean isUpdatingTable = false; // Flag to prevent infinite recursion
         
         private static class Position {
             int x, y, z, t;
@@ -229,7 +230,7 @@ public class DanceNow implements PlugIn {
             
             // Table edit listener
             tableModel.addTableModelListener(e -> {
-                if (e.getType() == TableModelEvent.UPDATE) {
+                if (e.getType() == TableModelEvent.UPDATE && !isUpdatingTable) {
                     updatePositionsFromTable();
                 }
             });
