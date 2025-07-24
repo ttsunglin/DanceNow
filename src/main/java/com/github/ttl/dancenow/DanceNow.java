@@ -12,6 +12,7 @@ import javax.swing.table.*;
 import javax.swing.event.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.awt.datatransfer.*;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.ArrayList;
@@ -42,7 +43,7 @@ public class DanceNow implements PlugIn {
     private static class DanceNowWindow extends JFrame {
         private JTextField xField, yField, zField, tField;
         private JLabel statusLabel, currentPosLabel;
-        private JButton goButton, addHereButton, nextButton, backButton, removeButton, exportButton, loadButton, bulkAddButton;
+        private JButton goButton, addHereButton, nextButton, backButton, removeButton, exportButton, loadButton;
         private Timer updateTimer;
         private JTable positionTable;
         private DefaultTableModel tableModel;
@@ -95,7 +96,6 @@ public class DanceNow implements PlugIn {
             removeButton = new JButton("Remove");
             exportButton = new JButton("Export");
             loadButton = new JButton("Load");
-            bulkAddButton = new JButton("Bulk Add");
             
             statusLabel = new JLabel("No image open");
             currentPosLabel = new JLabel("Current: --");
@@ -118,6 +118,9 @@ public class DanceNow implements PlugIn {
             positionTable = new JTable(tableModel);
             positionTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
             positionTable.setFont(fieldFont);
+            
+            // Set table to be focusable for paste operations
+            positionTable.setFocusable(true);
         }
         
         private void layoutComponents() {
@@ -169,7 +172,6 @@ public class DanceNow implements PlugIn {
             navPanel.add(removeButton);
             navPanel.add(exportButton);
             navPanel.add(loadButton);
-            navPanel.add(bulkAddButton);
             topPanel.add(navPanel, BorderLayout.SOUTH);
             
             mainPanel.add(topPanel, BorderLayout.NORTH);
@@ -218,8 +220,8 @@ public class DanceNow implements PlugIn {
             // Load button action
             loadButton.addActionListener(e -> loadPositions());
             
-            // Bulk add button action
-            bulkAddButton.addActionListener(e -> showBulkAddDialog());
+            // Add paste functionality to the table
+            setupTablePasteHandler();
             
             // Table selection listener
             positionTable.getSelectionModel().addListSelectionListener(e -> {
@@ -260,6 +262,80 @@ public class DanceNow implements PlugIn {
                 @Override
                 public void windowLostFocus(WindowEvent e) {}
             });
+        }
+        
+        private void setupTablePasteHandler() {
+            // Add keyboard listener for paste functionality
+            KeyStroke paste = KeyStroke.getKeyStroke(KeyEvent.VK_V, 
+                Toolkit.getDefaultToolkit().getMenuShortcutKeyMask());
+            
+            // Add paste action to table
+            positionTable.getInputMap(JComponent.WHEN_FOCUSED).put(paste, "paste");
+            positionTable.getActionMap().put("paste", new AbstractAction() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    handleDirectPaste();
+                }
+            });
+            
+            // Add paste action to window when table has focus
+            positionTable.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(paste, "paste-ancestor");
+            positionTable.getActionMap().put("paste-ancestor", new AbstractAction() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    handleDirectPaste();
+                }
+            });
+            
+            // Also add to the window for global access
+            getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(paste, "paste-global");
+            getRootPane().getActionMap().put("paste-global", new AbstractAction() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    handleDirectPaste();
+                }
+            });
+            
+            // Add right-click context menu
+            JPopupMenu popupMenu = new JPopupMenu();
+            JMenuItem pasteItem = new JMenuItem("Paste Positions");
+            pasteItem.setAccelerator(paste);
+            pasteItem.addActionListener(e -> handleDirectPaste());
+            popupMenu.add(pasteItem);
+            
+            positionTable.setComponentPopupMenu(popupMenu);
+            
+            // Also add popup to scroll pane for easier access
+            Container parent = positionTable.getParent();
+            if (parent instanceof JViewport) {
+                parent = parent.getParent();
+                if (parent instanceof JScrollPane) {
+                    ((JScrollPane) parent).setComponentPopupMenu(popupMenu);
+                }
+            }
+        }
+        
+        private void handleDirectPaste() {
+            try {
+                Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+                Transferable contents = clipboard.getContents(null);
+                
+                if (contents != null && contents.isDataFlavorSupported(DataFlavor.stringFlavor)) {
+                    String clipboardData = (String) contents.getTransferData(DataFlavor.stringFlavor);
+                    
+                    if (clipboardData != null && !clipboardData.trim().isEmpty()) {
+                        parseBulkPositions(clipboardData);
+                        statusLabel.setText("Pasted positions from clipboard");
+                    } else {
+                        statusLabel.setText("Clipboard is empty");
+                    }
+                } else {
+                    statusLabel.setText("No text data in clipboard");
+                }
+            } catch (Exception ex) {
+                statusLabel.setText("Paste error: " + ex.getClass().getSimpleName());
+                ex.printStackTrace();
+            }
         }
         
         private void startPositionUpdater() {
@@ -427,27 +503,6 @@ public class DanceNow implements PlugIn {
             
             navigateToPosition(imp, pos.x, pos.y, pos.z, pos.t);
             statusLabel.setText("Moved to: " + pos.toString());
-        }
-        
-        private void showBulkAddDialog() {
-            // Create a dialog with a text area for bulk input
-            JTextArea textArea = new JTextArea(10, 40);
-            textArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-            JScrollPane scrollPane = new JScrollPane(textArea);
-            
-            JPanel panel = new JPanel(new BorderLayout());
-            panel.add(new JLabel("Paste positions (one per line, format: X Y Z T or X,Y,Z,T or X\tY\tZ\tT):"), BorderLayout.NORTH);
-            panel.add(scrollPane, BorderLayout.CENTER);
-            
-            int result = JOptionPane.showConfirmDialog(this, panel, "Bulk Add Positions", 
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-            
-            if (result == JOptionPane.OK_OPTION) {
-                String text = textArea.getText();
-                if (!text.trim().isEmpty()) {
-                    parseBulkPositions(text);
-                }
-            }
         }
         
         private void parseBulkPositions(String text) {

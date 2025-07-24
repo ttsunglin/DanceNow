@@ -40,7 +40,8 @@ A Fiji/ImageJ plugin that provides a persistent navigation window for quickly ju
 
 #### Adding Positions
 - Click **"Add here"** to add the current view center position to the list
-- Click **"Bulk Add"** to paste multiple positions from Excel or other sources
+- **Direct paste**: Press Ctrl+V (Cmd+V on Mac) anywhere in the window to paste multiple positions
+- **Right-click** on the position list and select "Paste Positions"
 - Positions are displayed in X,Y,Z,T format (e.g., "512,384,1,1")
 - You can manually edit positions directly in the list
 
@@ -54,8 +55,9 @@ A Fiji/ImageJ plugin that provides a persistent navigation window for quickly ju
 - Select a position and click **"Remove"** to delete it from the list
 - Click **"Export"** to save all positions to a text file
 - Click **"Load"** to import positions from a previously saved text file
-- Click **"Bulk Add"** to paste multiple positions at once:
-  - Opens a dialog where you can paste positions from Excel or other sources
+- **Paste multiple positions directly**:
+  - Press Ctrl+V (Cmd+V on Mac) to paste from Excel or other sources
+  - Right-click and select "Paste Positions" from the context menu
   - Supports multiple delimiters: comma, space, or tab
   - Perfect for copying data directly from spreadsheets
   - Format: One position per line (e.g., `100 200 1 1` or `100,200,1,1` or `100→200→1→1`)
@@ -107,9 +109,8 @@ Each line represents X,Y,Z,T coordinates. The plugin accepts multiple delimiters
 To import positions from Excel:
 1. Arrange your data in 4 columns: X, Y, Z, T
 2. Select and copy the cells (Ctrl+C/Cmd+C)
-3. Click "Bulk Add" in DanceNow
-4. Paste (Ctrl+V/Cmd+V) into the dialog
-5. Click OK to import all positions
+3. In DanceNow, press Ctrl+V (Cmd+V on Mac) to paste directly
+4. Positions are automatically added to the list
 
 This flexibility makes it seamless to work with position data from spreadsheets, analysis software, or manual entry.
 
