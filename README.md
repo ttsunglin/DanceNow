@@ -1,6 +1,10 @@
-# Fiji DanceNow Plugin
+# 🎯 Fiji DanceNow Plugin
 
-A Fiji/ImageJ plugin that provides a persistent navigation window for quickly jumping to specific X,Y,Z,T coordinates while preserving your current zoom level, with advanced position list management and visual center indication.
+[![Fiji](https://img.shields.io/badge/Fiji-ImageJ-green.svg)](https://fiji.sc/)
+[![Java](https://img.shields.io/badge/Java-8%2B-blue.svg)](https://www.java.com/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+A powerful Fiji/ImageJ plugin that provides a persistent navigation window for precise coordinate jumping with zoom preservation, advanced position management, and visual center indication.
 
 ## Features
 
@@ -19,22 +23,26 @@ A Fiji/ImageJ plugin that provides a persistent navigation window for quickly ju
 - **Clear All**: Quick removal of all positions with confirmation dialog
 - **Auto-Rename on Export**: Prevents file overwrites by auto-numbering duplicates
 
-## Installation
+## 📦 Installation
 
-1. Download the compiled `target/DanceNow.jar` JAR file
-2. Place it in your Fiji `plugins/EveryBody` directory
-3. Restart Fiji
+1. **Download** the latest `DanceNow.jar` from [Releases](https://github.com/ttsunglin/DanceNow/releases) or build from source
+2. **Copy** the JAR file to your Fiji installation:
+   - Windows: `Fiji.app/plugins/EveryBody/`
+   - macOS: `/Applications/Fiji.app/plugins/EveryBody/`
+   - Linux: `~/Fiji.app/plugins/EveryBody/`
+3. **Restart** Fiji
+4. **Access** via menu: `Plugins > EveryBody > DanceNow`
 
-## Usage
+## 🚀 Quick Start
 
-1. Open an image in Fiji
-2. Go to `Plugins > EveryBody > DanceNow`
-3. A persistent navigation window will appear showing:
-   - Current position (X,Y,Z,T coordinates of view center)
-   - Image information (dimensions and title)
-   - Input fields for target coordinates
-   - Position list with editable entries
-   - Navigation and management buttons
+1. **Open** any image in Fiji (2D, 3D stack, or 4D time series)
+2. **Launch** DanceNow: `Plugins > EveryBody > DanceNow`
+3. **Navigate** using the compact floating window:
+   - ✅ Enter coordinates and click "Go"
+   - ✅ Toggle green crosshair with "Show center +"
+   - ✅ Add current position with "Add" button
+   - ✅ Navigate saved positions with Back/Next
+   - ✅ Right-click for context menu options
 
 ### Basic Navigation
 - Enter X,Y,Z,T coordinates in the compact input fields
@@ -72,29 +80,44 @@ A Fiji/ImageJ plugin that provides a persistent navigation window for quickly ju
   - Perfect for copying data directly from spreadsheets
   - Format: One position per line with optional note
 
-### Features in Detail
+### ✨ Key Features
 
-- **Compact Interface**: Optimized field widths and button sizes for minimal window footprint
-- **Real-time Updates**: Position and crosshair update every 50ms with mouse movement listeners
-- **Smart Crosshair**: Size adjusts with zoom level to remain visually consistent
-- **File Safety**: Auto-rename prevents overwriting existing export files
-- **CSV Support**: Export/import with headers and note column preservation
-- **Validation**: Real-time coordinate validation with helpful error messages
-- **Multi-dimensional Support**: Works with 2D, 3D (Z-stacks), and 4D (time series) images
-- **Cross-platform**: Compatible with both Mac and Windows systems
+| Feature | Description |
+|---------|-------------|
+| 🎯 **Smart Crosshair** | Green center indicator that scales with zoom |
+| 📝 **Position Notes** | Add descriptions to saved positions |
+| 🔄 **Real-time Updates** | 50ms refresh rate for smooth tracking |
+| 💾 **Auto-save Names** | Never overwrite files - auto-adds (2), (3)... |
+| 📊 **CSV/TXT Export** | Full format support with headers |
+| 🖱️ **Mouse-Only Mode** | No keyboard shortcuts for better integration |
+| ⚡ **Instant Validation** | Immediate feedback on coordinate bounds |
+| 🔢 **Smart Sorting** | Click headers to sort by position or note |
 
-## Requirements
+## ⚙️ Requirements
 
-- Fiji/ImageJ
-- Java 8 or later
+- **Fiji/ImageJ**: Latest version recommended
+- **Java**: Version 8 or later
+- **Memory**: Minimal (~10MB)
+- **OS**: Windows, macOS, or Linux
 
-## Building
+## 🔨 Building from Source
 
 ```bash
+# Clone the repository
+git clone https://github.com/ttsunglin/DanceNow.git
+cd DanceNow
+
+# Build with Maven
 mvn clean package
+
+# Find the JAR
+ls target/DanceNow.jar
 ```
 
-The compiled plugin will be available as `DanceNow.jar` in the `target/` directory.
+### Development Setup
+- **IDE**: IntelliJ IDEA or Eclipse with Maven support
+- **JDK**: OpenJDK 8+ or Oracle JDK 8+
+- **Maven**: Version 3.6+
 
 ## File Formats
 
@@ -127,4 +150,48 @@ The plugin intelligently handles various formats:
 3. Right-click in DanceNow position list
 4. Select "Paste Positions" from context menu
 5. Positions automatically parse and validate
+
+## 🎮 Keyboard Shortcuts
+
+| Action | Shortcut | Notes |
+|--------|----------|-------|
+| Navigate | Mouse click on "Go" | Keyboard shortcuts disabled |
+| Add Position | Mouse click on "Add" | Preserves note field |
+| Remove Position | Mouse click on "Remove" | Removes selected |
+| Context Menu | Right-click on table | Copy/Cut/Paste options |
+
+## 🐛 Troubleshooting
+
+**Issue**: Plugin not appearing in menu
+- **Solution**: Ensure JAR is in `plugins/EveryBody/` folder and restart Fiji
+
+**Issue**: Crosshair not visible
+- **Solution**: Check "Show center +" checkbox is enabled
+
+**Issue**: Out of bounds error
+- **Solution**: Edit position directly in table or remove invalid entry
+
+**Issue**: Can't paste positions
+- **Solution**: Use right-click context menu, not keyboard shortcuts
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📧 Contact
+
+For bugs and feature requests, please [open an issue](https://github.com/ttsunglin/DanceNow/issues).
+
+## 🙏 Acknowledgments
+
+- Fiji/ImageJ community for the excellent plugin framework
+- All contributors and users who provided feedback
+
+---
+
+<p align="center">Made with ❤️ for the microscopy community</p>
 
