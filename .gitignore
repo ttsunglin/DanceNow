@@ -1,0 +1,35 @@
+# Build artifacts
+target/
+*.jar
+*.class
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+
+# Log files
+*.log
+
+# If you want to exclude MD files (uncomment the line below)
+# *.md
+
+# Or exclude specific MD files (uncomment as needed)
+# CLAUDE.md
+# REPOSITORY_STRUCTURE.md
+
+# Keep README.md (if excluding all .md files)
+# !README.md

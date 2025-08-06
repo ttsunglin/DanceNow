@@ -1,22 +1,27 @@
 # Fiji DanceNow Plugin
 
-A Fiji/ImageJ plugin that provides a persistent navigation window for quickly jumping to specific X,Y,Z,T coordinates while preserving your current zoom level, with position list management capabilities.
+A Fiji/ImageJ plugin that provides a persistent navigation window for quickly jumping to specific X,Y,Z,T coordinates while preserving your current zoom level, with advanced position list management and visual center indication.
 
 ## Features
 
+### Core Navigation
 - **Persistent Navigation Window**: A floating, always-on-top window that stays open for repeated use
-- **Real-time Position Updates**: Shows your current view center and image information
-- **Position List Management**: Save, edit, and navigate through multiple positions
-- **Bulk Import from Excel**: Copy and paste multiple positions directly from spreadsheets
-- **Quick Navigation**: Navigate to any X,Y,Z,T coordinate with a single click or Enter key
+- **Real-time Position Updates**: Shows your current view center and image information updated every 50ms
 - **Zoom Preservation**: Maintains your current zoom level during navigation
-- **Input Validation**: Prevents out-of-bounds coordinates with immediate feedback
-- **Keyboard Shortcuts**: Press Enter in any field to navigate instantly
-- **Export/Import Positions**: Save position lists to text files for later use
+- **Visual Center Indicator**: Optional green crosshair showing exact center position for accurate position marking
+- **Mouse-Only Interface**: All interactions through mouse clicks (keyboard shortcuts disabled for better integration)
+
+### Position Management
+- **Position List with Notes**: Save positions with optional notes for easy identification
+- **In-Table Editing**: Edit positions directly in the table with automatic validation
+- **Smart Position Adding**: Automatically fills first empty row instead of appending
+- **Sorting**: Click column headers to sort by position or note
+- **Clear All**: Quick removal of all positions with confirmation dialog
+- **Auto-Rename on Export**: Prevents file overwrites by auto-numbering duplicates
 
 ## Installation
 
-1. Download the compiled `traget/DanceNow.jar` JAR file from releases
+1. Download the compiled `target/DanceNow.jar` JAR file
 2. Place it in your Fiji `plugins/EveryBody` directory
 3. Restart Fiji
 
@@ -32,46 +37,51 @@ A Fiji/ImageJ plugin that provides a persistent navigation window for quickly ju
    - Navigation and management buttons
 
 ### Basic Navigation
-- Enter X,Y,Z,T coordinates in the input fields
-- Click "Go" or press Enter in any field to navigate
+- Enter X,Y,Z,T coordinates in the compact input fields
+- Click "Go" button to navigate (Enter key disabled)
 - The view will center on the specified position while preserving zoom
+- Toggle "Show center +" to display/hide the green crosshair indicator
 
 ### Position List Management
 
 #### Adding Positions
-- Click **"Add here"** to add the current view center position to the list
-- **Direct paste**: Press Ctrl+V (Cmd+V on Mac) anywhere in the window to paste multiple positions
-- **Right-click** on the position list and select "Paste Positions"
-- Positions are displayed in X,Y,Z,T format (e.g., "512,384,1,1")
-- You can manually edit positions directly in the list
+- Click **"Add"** to add the current view center position to the list
+- Optional **Note field** persists after adding for rapid annotation
+- **Right-click** on the position list and select "Paste Positions" from context menu
+- Positions are displayed in X,Y,Z,T format with optional notes
+- Edit positions directly in the table - changes are validated immediately
+- First empty row is automatically used when adding new positions
 
 #### Navigating Through Positions
-- Click **"<Back"** to go to the previous position in the list
-- Click **"Next>"** to go to the next position in the list
+- Click **"< Back"** to go to the previous position in the list
+- Click **"Next >"** to go to the next position in the list
 - Click any position in the list to select it, then click "Go"
 - Navigation wraps around (Next from last position goes to first)
+- Out-of-bounds positions show warnings and prevent navigation
+- Manual edits in table are immediately reflected in navigation
 
 #### Managing the List
 - Select a position and click **"Remove"** to delete it from the list
-- Click **"Export"** to save all positions to a text file
-- Click **"Load"** to import positions from a previously saved text file
-- **Paste multiple positions directly**:
-  - Press Ctrl+V (Cmd+V on Mac) to paste from Excel or other sources
-  - Right-click and select "Paste Positions" from the context menu
+- Click **"Clear All"** to remove all positions (with confirmation)
+- Click **"Export"** to save positions as TXT or CSV format
+- Click **"Load"** to import positions from TXT or CSV files
+- **Sort positions**: Click column headers to sort by position or note
+- **Paste positions via context menu**:
+  - Right-click and select "Paste Positions"
   - Supports multiple delimiters: comma, space, or tab
   - Perfect for copying data directly from spreadsheets
-  - Format: One position per line (e.g., `100 200 1 1` or `100,200,1,1` or `100→200→1→1`)
+  - Format: One position per line with optional note
 
 ### Features in Detail
 
-- **Persistent Window**: The DanceNow window stays open and can be used multiple times without reopening
-- **Real-time Updates**: Current position updates automatically every 500ms
-- **Always on Top**: Window stays visible above other applications for easy access
-- **Boundary Checking**: Automatically validates coordinates against image dimensions
+- **Compact Interface**: Optimized field widths and button sizes for minimal window footprint
+- **Real-time Updates**: Position and crosshair update every 50ms with mouse movement listeners
+- **Smart Crosshair**: Size adjusts with zoom level to remain visually consistent
+- **File Safety**: Auto-rename prevents overwriting existing export files
+- **CSV Support**: Export/import with headers and note column preservation
+- **Validation**: Real-time coordinate validation with helpful error messages
 - **Multi-dimensional Support**: Works with 2D, 3D (Z-stacks), and 4D (time series) images
-- **Editable Position List**: Double-click any position in the list to edit it directly
-- **Flexible Import Format**: Accepts comma, space, or tab-separated values for easy Excel integration
-- **Position File Format**: Simple text format with one position per line (X,Y,Z,T)
+- **Cross-platform**: Compatible with both Mac and Windows systems
 
 ## Requirements
 
@@ -86,31 +96,35 @@ mvn clean package
 
 The compiled plugin will be available as `DanceNow.jar` in the `target/` directory.
 
-## Position File Format & Excel Integration
+## File Formats
 
-### File Format
-When exporting or importing positions, the plugin supports flexible formatting with one position per line:
+### CSV Format (with Notes)
+```csv
+X,Y,Z,T,Note
+512,384,1,1,Cell nucleus
+1024,768,5,1,Region of interest
+256,256,10,3,Background sample
+```
 
+### TXT Format (Position only)
 ```
 512,384,1,1
-1024 768 5 1
-256	256	10	3
-800,600,15,5
+1024,768,5,1
+256,256,10,3
 ```
 
-### Supported Delimiters
-Each line represents X,Y,Z,T coordinates. The plugin accepts multiple delimiters:
-- **Commas**: `512,384,1,1`
-- **Spaces**: `512 384 1 1`
-- **Tabs**: `512	384	1	1` (Excel default)
-- **Mixed**: `512,384 1	1` (any combination works)
+### Import Flexibility
+The plugin intelligently handles various formats:
+- **Missing X,Y**: Position skipped with warning
+- **Missing Z,T**: Defaults to 1 with notification
+- **Out-of-bounds X,Y**: Imported but warns during navigation
+- **Out-of-bounds Z,T**: Auto-adjusted to valid range
+- **Multiple delimiters**: Comma, space, tab, or mixed
 
-### Excel Integration
-To import positions from Excel:
-1. Arrange your data in 4 columns: X, Y, Z, T
-2. Select and copy the cells (Ctrl+C/Cmd+C)
-3. In DanceNow, press Ctrl+V (Cmd+V on Mac) to paste directly
-4. Positions are automatically added to the list
-
-This flexibility makes it seamless to work with position data from spreadsheets, analysis software, or manual entry.
+### Excel/Spreadsheet Integration
+1. Arrange data in columns (X, Y, Z, T, optional Note)
+2. Copy cells from spreadsheet
+3. Right-click in DanceNow position list
+4. Select "Paste Positions" from context menu
+5. Positions automatically parse and validate
 
