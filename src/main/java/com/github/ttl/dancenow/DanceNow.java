@@ -8,6 +8,13 @@ import ij.gui.ImageWindow;
 import ij.gui.ImageCanvas;
 import ij.gui.Overlay;
 import ij.gui.Line;
+import ij.gui.Roi;
+import ij.gui.TextRoi;
+import ij.process.ImageProcessor;
+import ij.plugin.ChannelSplitter;
+import ij.plugin.RGBStackMerge;
+import ij.CompositeImage;
+import ij.process.LUT;
 
 import javax.swing.*;
 import javax.swing.table.*;
@@ -47,7 +54,7 @@ public class DanceNow implements PlugIn {
     private static class DanceNowWindow extends JFrame {
         private JTextField xField, yField, zField, tField, noteField;
         private JLabel statusLabel, currentPosLabel;
-        private JButton goButton, addHereButton, nextButton, backButton, removeButton, clearButton, exportButton, loadButton;
+        private JButton goButton, addHereButton, nextButton, backButton, removeButton, clearButton, exportButton, loadButton, snapshotButton;
         private Timer updateTimer;
         private JTable positionTable;
         private DefaultTableModel tableModel;
@@ -57,6 +64,9 @@ public class DanceNow implements PlugIn {
         private boolean sortAscending = true; // Track sort direction
         private Overlay crosshairOverlay; // Overlay for center crosshair
         private boolean showCrosshair = true; // Toggle for crosshair visibility
+        private ImageWindow lastImageWindow; // Track last image window for cleanup
+        private MouseMotionListener crosshairMouseListener; // Mouse listener for crosshair
+        private MouseWheelListener crosshairWheelListener; // Wheel listener for crosshair
         
         private static class Position {
             int x, y, z, t;
@@ -126,11 +136,11 @@ public class DanceNow implements PlugIn {
         }
         
         private void createComponents() {
-            xField = new JTextField(4);
-            yField = new JTextField(4);
+            xField = new JTextField(3);
+            yField = new JTextField(3);
             zField = new JTextField(3);
             tField = new JTextField(3);
-            noteField = new JTextField(5);
+            noteField = new JTextField(8);
             
             goButton = new JButton("Go");
             addHereButton = new JButton("Add");
@@ -139,6 +149,7 @@ public class DanceNow implements PlugIn {
             removeButton = new JButton("Remove");
             clearButton = new JButton("Clear All");
             exportButton = new JButton("Export");
+            snapshotButton = new JButton("Snapshot");
             loadButton = new JButton("Load");
             
             statusLabel = new JLabel("No image open");
@@ -152,20 +163,21 @@ public class DanceNow implements PlugIn {
             tField.setFont(fieldFont);
             noteField.setFont(fieldFont);
             
-            // Create table for positions with two columns
-            String[] columnNames = {"X,Y,Z,T", "Note"};
+            // Create table for positions with three columns (including row number)
+            String[] columnNames = {"#", "X,Y,Z,T", "Note"};
             tableModel = new DefaultTableModel(columnNames, 0) {
                 @Override
                 public boolean isCellEditable(int row, int column) {
-                    return true;
+                    // Row number column (column 0) is not editable
+                    return column > 0;
                 }
                 
                 @Override
                 public void setValueAt(Object value, int row, int column) {
                     super.setValueAt(value, row, column);
                     // Add new row if editing the last row and it's not empty
-                    if (row == getRowCount() - 1 && column == 0 && value != null && !value.toString().trim().isEmpty()) {
-                        addRow(new Object[]{"", ""});
+                    if (row == getRowCount() - 1 && column == 1 && value != null && !value.toString().trim().isEmpty()) {
+                        addRow(new Object[]{getRowCount() + 1, "", ""});
                     }
                 }
             };
@@ -176,12 +188,13 @@ public class DanceNow implements PlugIn {
             positionTable.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
             
             // Set column widths
-            positionTable.getColumnModel().getColumn(0).setPreferredWidth(150);
-            positionTable.getColumnModel().getColumn(1).setPreferredWidth(250);
+            positionTable.getColumnModel().getColumn(0).setPreferredWidth(25);  // Row number column
+            positionTable.getColumnModel().getColumn(1).setPreferredWidth(100); // Position column
+            positionTable.getColumnModel().getColumn(2).setPreferredWidth(150); // Note column
             
             // Add initial empty rows for user convenience
             for (int i = 0; i < 5; i++) {
-                tableModel.addRow(new Object[]{"", ""});
+                tableModel.addRow(new Object[]{i + 1, "", ""});
                 positions.add(null);  // Add corresponding null positions
             }
             
@@ -274,13 +287,14 @@ public class DanceNow implements PlugIn {
             JPanel listPanel = new JPanel(new BorderLayout());
             listPanel.setBorder(BorderFactory.createTitledBorder("Position List"));
             JScrollPane scrollPane = new JScrollPane(positionTable);
-            scrollPane.setPreferredSize(new Dimension(350, 200));  // Reduce width
+            scrollPane.setPreferredSize(new Dimension(280, 180));  // Compact size
             listPanel.add(scrollPane, BorderLayout.CENTER);
             
-            // List management buttons panel (Remove, Clear, Export, Load) - below the list
+            // List management buttons panel (Remove, Clear, Snapshot, Export, Load) - below the list
             JPanel listButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
             listButtonPanel.add(removeButton);
             listButtonPanel.add(clearButton);
+            listButtonPanel.add(snapshotButton);
             listButtonPanel.add(exportButton);
             listButtonPanel.add(loadButton);
             listPanel.add(listButtonPanel, BorderLayout.SOUTH);
@@ -321,6 +335,9 @@ public class DanceNow implements PlugIn {
             
             // Export button action
             exportButton.addActionListener(e -> exportPositions());
+            
+            // Snapshot button action
+            snapshotButton.addActionListener(e -> openSnapshotDialog());
             
             // Load button action
             loadButton.addActionListener(e -> loadPositions());
@@ -380,12 +397,16 @@ public class DanceNow implements PlugIn {
         }
         
         private void sortByColumn(int column) {
+            // Skip sorting if it's the row number column
+            if (column == 0) {
+                return;
+            }
             // Create a list of positions with their table row data
             List<PositionWithRow> sortablePositions = new ArrayList<>();
             for (int i = 0; i < positions.size(); i++) {
                 Position pos = positions.get(i);
                 if (pos != null) {
-                    Object noteObj = tableModel.getValueAt(i, 1);
+                    Object noteObj = tableModel.getValueAt(i, 2);
                     String note = noteObj != null ? noteObj.toString() : "";
                     sortablePositions.add(new PositionWithRow(pos, note, i));
                 }
@@ -397,7 +418,7 @@ public class DanceNow implements PlugIn {
             }
             
             // Sort based on column
-            if (column == 0) {
+            if (column == 1) {
                 // Sort by X,Y,Z,T
                 sortablePositions.sort((a, b) -> {
                     int result = Integer.compare(a.position.x, b.position.x);
@@ -407,7 +428,7 @@ public class DanceNow implements PlugIn {
                     return sortAscending ? result : -result;
                 });
                 statusLabel.setText("Sorted by position " + (sortAscending ? "(ascending)" : "(descending)"));
-            } else if (column == 1) {
+            } else if (column == 2) {
                 // Sort by Note
                 sortablePositions.sort((a, b) -> {
                     if (a.note.isEmpty() && b.note.isEmpty()) return 0;
@@ -428,12 +449,12 @@ public class DanceNow implements PlugIn {
             
             for (PositionWithRow pwr : sortablePositions) {
                 positions.add(pwr.position);
-                tableModel.addRow(new Object[]{pwr.position.toString(), pwr.note});
+                tableModel.addRow(new Object[]{positions.size(), pwr.position.toString(), pwr.note});
             }
             
             // Add empty rows back
             while (tableModel.getRowCount() < 5) {
-                tableModel.addRow(new Object[]{"", ""});
+                tableModel.addRow(new Object[]{tableModel.getRowCount() + 1, "", ""});
                 positions.add(null);
             }
             
@@ -521,7 +542,7 @@ public class DanceNow implements PlugIn {
             
             StringBuilder sb = new StringBuilder();
             for (int row : selectedRows) {
-                Object value = tableModel.getValueAt(row, 0);
+                Object value = tableModel.getValueAt(row, 1);
                 if (value != null && !value.toString().trim().isEmpty()) {
                     sb.append(value.toString()).append("\n");
                 }
@@ -554,7 +575,8 @@ public class DanceNow implements PlugIn {
             
             // Clear selected rows (don't remove them, just clear content)
             for (int row : selectedRows) {
-                tableModel.setValueAt("", row, 0);
+                tableModel.setValueAt("", row, 1);  // Clear position
+                tableModel.setValueAt("", row, 2);  // Clear note
             }
             
             updatePositionsFromTable();
@@ -566,7 +588,7 @@ public class DanceNow implements PlugIn {
             if (selectedRow >= 0) {
                 tableModel.insertRow(selectedRow, new Object[]{""});
             } else {
-                tableModel.addRow(new Object[]{""});
+                tableModel.addRow(new Object[]{tableModel.getRowCount() + 1, "", ""});
             }
             updatePositionsFromTable();
             statusLabel.setText("Inserted new row");
@@ -587,10 +609,6 @@ public class DanceNow implements PlugIn {
                 }
             }, 0, 50); // Update every 50ms for more responsive crosshair
         }
-        
-        private ImageWindow lastImageWindow = null;
-        private MouseMotionListener crosshairMouseListener = null;
-        private MouseWheelListener crosshairWheelListener = null;
         
         private void addImageWindowListeners() {
             ImagePlus imp = WindowManager.getCurrentImage();
@@ -814,6 +832,37 @@ public class DanceNow implements PlugIn {
                 String note = noteField.getText().trim();
                 Position pos = new Position(centerX, centerY, imp.getZ(), imp.getT(), note);
                 
+                // Check for duplicate position (same X, Y, Z, T)
+                boolean isDuplicate = false;
+                int duplicateRow = -1;
+                for (int i = 0; i < positions.size(); i++) {
+                    Position existingPos = positions.get(i);
+                    if (existingPos != null && 
+                        existingPos.x == pos.x && 
+                        existingPos.y == pos.y && 
+                        existingPos.z == pos.z && 
+                        existingPos.t == pos.t) {
+                        isDuplicate = true;
+                        duplicateRow = i + 1; // Row number for display (1-based)
+                        break;
+                    }
+                }
+                
+                // Show warning if duplicate found
+                if (isDuplicate) {
+                    int result = JOptionPane.showConfirmDialog(this,
+                        String.format("Position %d,%d,%d,%d already exists at row %d.\nDo you still want to add it?", 
+                                    pos.x, pos.y, pos.z, pos.t, duplicateRow),
+                        "Duplicate Position Warning",
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.WARNING_MESSAGE);
+                    
+                    if (result != JOptionPane.YES_OPTION) {
+                        statusLabel.setText("Duplicate position not added");
+                        return;
+                    }
+                }
+                
                 // Find first empty row or add at the end
                 int insertRow = -1;
                 for (int i = 0; i < positions.size(); i++) {
@@ -823,7 +872,7 @@ public class DanceNow implements PlugIn {
                         break;
                     }
                     // Also check if the position string is empty (another way a row can be empty)
-                    String posStr = tableModel.getValueAt(i, 0).toString().trim();
+                    String posStr = tableModel.getValueAt(i, 1).toString().trim();
                     if (posStr.isEmpty()) {
                         insertRow = i;
                         break;
@@ -833,12 +882,12 @@ public class DanceNow implements PlugIn {
                 if (insertRow >= 0) {
                     // Replace empty position
                     positions.set(insertRow, pos);
-                    tableModel.setValueAt(pos.toString(), insertRow, 0);
-                    tableModel.setValueAt(note, insertRow, 1);
+                    tableModel.setValueAt(pos.toString(), insertRow, 1);
+                    tableModel.setValueAt(note, insertRow, 2);
                 } else {
                     // Add new row at the end
                     positions.add(pos);
-                    tableModel.addRow(new Object[]{pos.toString(), note});
+                    tableModel.addRow(new Object[]{tableModel.getRowCount() + 1, pos.toString(), note});
                 }
                 
                 // Clear coordinate fields but NOT the note field
@@ -984,12 +1033,12 @@ public class DanceNow implements PlugIn {
                             if (insertRow >= 0) {
                                 // Replace empty position
                                 positions.set(insertRow, pos);
-                                tableModel.setValueAt(pos.toString(), insertRow, 0);
-                                tableModel.setValueAt(note, insertRow, 1);
+                                tableModel.setValueAt(pos.toString(), insertRow, 1);
+                                tableModel.setValueAt(note, insertRow, 2);
                             } else {
                                 // Add new row at the end
                                 positions.add(pos);
-                                tableModel.addRow(new Object[]{pos.toString(), note});
+                                tableModel.addRow(new Object[]{tableModel.getRowCount() + 1, pos.toString(), note});
                             }
                             
                             addedCount++;
@@ -1034,7 +1083,7 @@ public class DanceNow implements PlugIn {
         private void updatePositionsFromTable() {
             positions.clear();
             for (int i = 0; i < tableModel.getRowCount(); i++) {
-                Object valueObj = tableModel.getValueAt(i, 0);
+                Object valueObj = tableModel.getValueAt(i, 1);
                 if (valueObj == null) {
                     positions.add(null); // Add null for empty rows
                     continue;
@@ -1055,7 +1104,7 @@ public class DanceNow implements PlugIn {
                         int t = Integer.parseInt(parts[3].trim());
                         
                         // Get note from second column
-                        Object noteObj = tableModel.getValueAt(i, 1);
+                        Object noteObj = tableModel.getValueAt(i, 2);
                         String note = noteObj != null ? noteObj.toString() : "";
                         
                         positions.add(new Position(x, y, z, t, note));
@@ -1073,6 +1122,11 @@ public class DanceNow implements PlugIn {
             if (selectedRow >= 0 && selectedRow < positions.size()) {
                 positions.remove(selectedRow);
                 tableModel.removeRow(selectedRow);
+                
+                // Update row numbers for all remaining rows
+                for (int i = 0; i < tableModel.getRowCount(); i++) {
+                    tableModel.setValueAt(i + 1, i, 0);
+                }
                 
                 // Update current position index if needed
                 if (currentPositionIndex >= positions.size()) {
@@ -1111,7 +1165,7 @@ public class DanceNow implements PlugIn {
                 
                 // Add back empty rows
                 for (int i = 0; i < 5; i++) {
-                    tableModel.addRow(new Object[]{"", ""});
+                    tableModel.addRow(new Object[]{tableModel.getRowCount() + 1, "", ""});
                     positions.add(null);
                 }
                 
@@ -1246,7 +1300,7 @@ public class DanceNow implements PlugIn {
                         for (int i = 0; i < positions.size(); i++) {
                             Position pos = positions.get(i);
                             if (pos != null) {
-                                Object noteObj = tableModel.getValueAt(i, 1);
+                                Object noteObj = tableModel.getValueAt(i, 2);
                                 String note = (noteObj != null ? noteObj.toString() : "").replace(",", ";"); // Escape commas in notes
                                 writer.write(String.format("%d,%d,%d,%d,%s\n", 
                                     pos.x, pos.y, pos.z, pos.t, note));
@@ -1352,7 +1406,7 @@ public class DanceNow implements PlugIn {
                     
                     // Add empty rows to maintain minimum row count
                     while (tableModel.getRowCount() < 5) {
-                        tableModel.addRow(new Object[]{""});
+                        tableModel.addRow(new Object[]{tableModel.getRowCount() + 1, "", ""});
                     }
                     
                     JOptionPane.showMessageDialog(this, 
@@ -1476,12 +1530,399 @@ public class DanceNow implements PlugIn {
                 
                 Position pos = new Position(x, y, z, t, note);
                 positions.add(pos);
-                tableModel.addRow(new Object[]{pos.toString(), note});
+                tableModel.addRow(new Object[]{tableModel.getRowCount() + 1, pos.toString(), note});
                 return true;
                 
             } catch (Exception e) {
                 // Unexpected error - skip line
                 return false;
+            }
+        }
+        
+        private void openSnapshotDialog() {
+            // Check if there are positions to snapshot
+            if (positions.isEmpty() || positions.stream().allMatch(p -> p == null)) {
+                JOptionPane.showMessageDialog(this, 
+                    "No positions to snapshot. Please add positions first.",
+                    "No Positions", 
+                    JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            
+            // Check if an image is open
+            ImagePlus imp = WindowManager.getCurrentImage();
+            if (imp == null) {
+                JOptionPane.showMessageDialog(this,
+                    "No image open. Please open an image first.",
+                    "No Image",
+                    JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            
+            // Open the snapshot dialog
+            SnapshotDialog dialog = new SnapshotDialog(this, imp);
+            dialog.setVisible(true);
+        }
+        
+        // Inner class for Snapshot Dialog
+        private class SnapshotDialog extends JDialog {
+            private JCheckBox includeCrossCheckBox;
+            private JCheckBox horizontalReverseCheckBox;
+            private JCheckBox annotationTextCheckBox;
+            private JTextField widthField, heightField;
+            private JCheckBox[] channelCheckBoxes;
+            private ImagePlus targetImage;
+            private JProgressBar progressBar;
+            private JLabel progressLabel;
+            
+            public SnapshotDialog(JFrame parent, ImagePlus imp) {
+                super(parent, "Snapshot Settings", true);
+                this.targetImage = imp;
+                initializeUI();
+                pack();
+                setLocationRelativeTo(parent);
+            }
+            
+            private void initializeUI() {
+                setLayout(new BorderLayout());
+                
+                JPanel mainPanel = new JPanel();
+                mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
+                mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+                
+                // Include cross, horizontal reverse, and annotation options
+                JPanel optionsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+                includeCrossCheckBox = new JCheckBox("Include center cross");
+                includeCrossCheckBox.setSelected(false);
+                horizontalReverseCheckBox = new JCheckBox("Horizontal reverse");
+                horizontalReverseCheckBox.setSelected(false);
+                annotationTextCheckBox = new JCheckBox("Annotation text");
+                annotationTextCheckBox.setSelected(false);
+                optionsPanel.add(includeCrossCheckBox);
+                optionsPanel.add(Box.createHorizontalStrut(15));
+                optionsPanel.add(horizontalReverseCheckBox);
+                optionsPanel.add(Box.createHorizontalStrut(15));
+                optionsPanel.add(annotationTextCheckBox);
+                mainPanel.add(optionsPanel);
+                
+                // Snapshot area settings
+                JPanel areaPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+                areaPanel.setBorder(BorderFactory.createTitledBorder("Snapshot Area"));
+                areaPanel.add(new JLabel("Width:"));
+                widthField = new JTextField("200", 5);
+                areaPanel.add(widthField);
+                areaPanel.add(new JLabel("pixels"));
+                areaPanel.add(Box.createHorizontalStrut(10));
+                areaPanel.add(new JLabel("Height:"));
+                heightField = new JTextField("200", 5);
+                areaPanel.add(heightField);
+                areaPanel.add(new JLabel("pixels"));
+                mainPanel.add(areaPanel);
+                
+                // Channel selection
+                JPanel channelPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+                channelPanel.setBorder(BorderFactory.createTitledBorder("Channels to Include"));
+                
+                int nChannels = targetImage.getNChannels();
+                channelCheckBoxes = new JCheckBox[Math.min(nChannels, 4)];
+                
+                for (int i = 0; i < channelCheckBoxes.length; i++) {
+                    channelCheckBoxes[i] = new JCheckBox("Ch" + (i + 1));
+                    channelCheckBoxes[i].setSelected(true); // Default all channels on
+                    channelPanel.add(channelCheckBoxes[i]);
+                }
+                
+                mainPanel.add(channelPanel);
+                
+                // Progress panel (initially hidden)
+                JPanel progressPanel = new JPanel(new BorderLayout());
+                progressPanel.setBorder(BorderFactory.createEmptyBorder(5, 0, 5, 0));
+                progressBar = new JProgressBar(0, 100);
+                progressBar.setStringPainted(true);
+                progressLabel = new JLabel("Ready to snapshot");
+                progressPanel.add(progressLabel, BorderLayout.NORTH);
+                progressPanel.add(progressBar, BorderLayout.CENTER);
+                progressPanel.setVisible(false);
+                mainPanel.add(progressPanel);
+                
+                add(mainPanel, BorderLayout.CENTER);
+                
+                // Button panel
+                JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+                JButton snapshotButton = new JButton("Take Snapshots");
+                JButton cancelButton = new JButton("Cancel");
+                
+                snapshotButton.addActionListener(e -> takeSnapshots(progressPanel));
+                cancelButton.addActionListener(e -> dispose());
+                
+                buttonPanel.add(snapshotButton);
+                buttonPanel.add(cancelButton);
+                add(buttonPanel, BorderLayout.SOUTH);
+            }
+            
+            private void takeSnapshots(JPanel progressPanel) {
+                // Validate input
+                int width, height;
+                try {
+                    width = Integer.parseInt(widthField.getText().trim());
+                    height = Integer.parseInt(heightField.getText().trim());
+                    if (width <= 0 || height <= 0) {
+                        throw new NumberFormatException();
+                    }
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(this,
+                        "Please enter valid positive integers for width and height.",
+                        "Invalid Input",
+                        JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+                
+                // Check if at least one channel is selected
+                boolean hasChannel = false;
+                for (JCheckBox cb : channelCheckBoxes) {
+                    if (cb.isSelected()) {
+                        hasChannel = true;
+                        break;
+                    }
+                }
+                
+                if (!hasChannel) {
+                    JOptionPane.showMessageDialog(this,
+                        "Please select at least one channel.",
+                        "No Channel Selected",
+                        JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+                
+                // Ask for save location
+                JFileChooser fileChooser = new JFileChooser();
+                fileChooser.setDialogTitle("Select Directory to Save Snapshots");
+                fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+                
+                if (fileChooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
+                    return;
+                }
+                
+                File saveDir = fileChooser.getSelectedFile();
+                
+                // Show progress
+                progressPanel.setVisible(true);
+                progressBar.setValue(0);
+                
+                // Process snapshots in background
+                SwingWorker<Void, Integer> worker = new SwingWorker<Void, Integer>() {
+                    @Override
+                    protected Void doInBackground() throws Exception {
+                        List<Position> validPositions = new ArrayList<>();
+                        for (Position pos : positions) {
+                            if (pos != null) {
+                                validPositions.add(pos);
+                            }
+                        }
+                        
+                        int total = validPositions.size();
+                        for (int i = 0; i < total; i++) {
+                            Position pos = validPositions.get(i);
+                            
+                            // Take snapshot at this position
+                            captureSnapshot(pos, width, height, includeCrossCheckBox.isSelected(), 
+                                          horizontalReverseCheckBox.isSelected(), annotationTextCheckBox.isSelected(),
+                                          channelCheckBoxes, saveDir, i + 1);
+                            
+                            publish((int)((i + 1) * 100.0 / total));
+                        }
+                        
+                        // Also export the CSV file
+                        exportPositionsToCSV(saveDir);
+                        
+                        return null;
+                    }
+                    
+                    @Override
+                    protected void process(List<Integer> chunks) {
+                        for (Integer progress : chunks) {
+                            progressBar.setValue(progress);
+                            progressLabel.setText(String.format("Processing... %d%%", progress));
+                        }
+                    }
+                    
+                    @Override
+                    protected void done() {
+                        try {
+                            get(); // Check for exceptions
+                            JOptionPane.showMessageDialog(SnapshotDialog.this,
+                                "Snapshots saved successfully!",
+                                "Success",
+                                JOptionPane.INFORMATION_MESSAGE);
+                            dispose();
+                        } catch (Exception ex) {
+                            JOptionPane.showMessageDialog(SnapshotDialog.this,
+                                "Error during snapshot: " + ex.getMessage(),
+                                "Error",
+                                JOptionPane.ERROR_MESSAGE);
+                        }
+                    }
+                };
+                
+                worker.execute();
+            }
+            
+            private void captureSnapshot(Position pos, int width, int height, boolean includeCross,
+                                        boolean horizontalReverse, boolean includeAnnotation, 
+                                        JCheckBox[] channels, File saveDir, int index) {
+                // Navigate to the position
+                targetImage.setZ(pos.z);
+                targetImage.setT(pos.t);
+                
+                // Calculate ROI bounds
+                int x = pos.x - width / 2;
+                int y = pos.y - height / 2;
+                
+                // Ensure bounds are within image
+                x = Math.max(0, Math.min(x, targetImage.getWidth() - width));
+                y = Math.max(0, Math.min(y, targetImage.getHeight() - height));
+                
+                // Set ROI
+                Roi roi = new Roi(x, y, width, height);
+                targetImage.setRoi(roi);
+                
+                // Crop and duplicate
+                ImagePlus cropped = targetImage.crop("snapshot");
+                
+                // Process channels if multi-channel
+                if (targetImage.getNChannels() > 1) {
+                    // Create composite image with selected channels
+                    ImagePlus mergedImage = mergeSelectedChannels(cropped, channels);
+                    if (mergedImage != null) {
+                        cropped = mergedImage;
+                    }
+                }
+                
+                // Create overlay for cross and/or annotation
+                Overlay overlay = null;
+                boolean needsFlattening = false;
+                
+                // Add cross if requested
+                if (includeCross) {
+                    if (overlay == null) overlay = new Overlay();
+                    int centerX = width / 2;
+                    int centerY = height / 2;
+                    
+                    Line hLine = new Line(centerX - 5, centerY, centerX + 5, centerY);
+                    hLine.setStrokeColor(Color.GREEN);
+                    hLine.setStrokeWidth(1);
+                    overlay.add(hLine);
+                    
+                    Line vLine = new Line(centerX, centerY - 5, centerX, centerY + 5);
+                    vLine.setStrokeColor(Color.GREEN);
+                    vLine.setStrokeWidth(1);
+                    overlay.add(vLine);
+                    needsFlattening = true;
+                }
+                
+                // Add annotation text if requested
+                if (includeAnnotation) {
+                    if (overlay == null) overlay = new Overlay();
+                    
+                    // Prepare annotation text: position number and note
+                    String annotationText = String.format("#%d", index);
+                    if (pos.note != null && !pos.note.trim().isEmpty()) {
+                        annotationText += ": " + pos.note;
+                    }
+                    
+                    // Create text ROI in top-left corner with some padding
+                    Font font = new Font("Arial", Font.BOLD, 12);
+                    TextRoi textRoi = new TextRoi(5, 5, annotationText, font);
+                    textRoi.setStrokeColor(Color.YELLOW);
+                    textRoi.setFillColor(null);
+                    textRoi.setAntialiased(true);
+                    overlay.add(textRoi);
+                    needsFlattening = true;
+                }
+                
+                // Apply horizontal flip first if requested so text remains readable (not mirrored)
+                if (horizontalReverse) {
+                    ImageProcessor ip = cropped.getProcessor();
+                    ip.flipHorizontal();
+                    cropped.setProcessor(ip);
+                }
+
+                // Now apply overlay (text/cross) and flatten onto the already-reversed image
+                if (overlay != null && needsFlattening) {
+                    cropped.setOverlay(overlay);
+                    cropped = cropped.flatten();
+                }
+                
+                // Save as PNG with appropriate filename
+                String filename;
+                if (horizontalReverse) {
+                    filename = String.format("Position_reverse_%03d.png", index);
+                } else {
+                    filename = String.format("Position_%03d.png", index);
+                }
+                File outputFile = new File(saveDir, filename);
+                IJ.save(cropped, outputFile.getAbsolutePath());
+                
+                // Clear ROI
+                targetImage.deleteRoi();
+            }
+            
+            private ImagePlus mergeSelectedChannels(ImagePlus imp, JCheckBox[] channelBoxes) {
+                if (imp.getNChannels() == 1) {
+                    return imp;
+                }
+                
+                // Split channels
+                ImagePlus[] channels = ChannelSplitter.split(imp);
+                ImagePlus[] selectedChannels = new ImagePlus[channels.length];
+                
+                // Keep only selected channels
+                for (int i = 0; i < channelBoxes.length && i < channels.length; i++) {
+                    if (channelBoxes[i].isSelected()) {
+                        selectedChannels[i] = channels[i];
+                    }
+                }
+                
+                // Merge selected channels
+                if (imp instanceof CompositeImage) {
+                    CompositeImage comp = (CompositeImage) imp;
+                    ImagePlus merged = RGBStackMerge.mergeChannels(selectedChannels, false);
+                    
+                    // Apply original LUTs and display settings
+                    if (merged instanceof CompositeImage) {
+                        CompositeImage mergedComp = (CompositeImage) merged;
+                        for (int i = 0; i < channelBoxes.length && i < channels.length; i++) {
+                            if (channelBoxes[i].isSelected() && selectedChannels[i] != null) {
+                                mergedComp.setChannelLut(comp.getChannelLut(i + 1), i + 1);
+                                mergedComp.setDisplayRange(comp.getDisplayRangeMin(), 
+                                                         comp.getDisplayRangeMax(), i + 1);
+                            }
+                        }
+                        mergedComp.setMode(CompositeImage.COMPOSITE);
+                        return mergedComp.flatten();
+                    }
+                }
+                
+                return RGBStackMerge.mergeChannels(selectedChannels, true);
+            }
+            
+            private void exportPositionsToCSV(File saveDir) {
+                File csvFile = new File(saveDir, "positions.csv");
+                try (FileWriter writer = new FileWriter(csvFile)) {
+                    writer.write("X,Y,Z,T,Note\n");
+                    for (Position pos : positions) {
+                        if (pos != null) {
+                            writer.write(String.format("%d,%d,%d,%d,%s\n",
+                                pos.x, pos.y, pos.z, pos.t,
+                                pos.note != null ? pos.note : ""));
+                        }
+                    }
+                } catch (IOException ex) {
+                    JOptionPane.showMessageDialog(this,
+                        "Failed to export CSV: " + ex.getMessage(),
+                        "Export Error",
+                        JOptionPane.ERROR_MESSAGE);
+                }
             }
         }
         

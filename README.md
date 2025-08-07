@@ -2,7 +2,6 @@
 
 [![Fiji](https://img.shields.io/badge/Fiji-ImageJ-green.svg)](https://fiji.sc/)
 [![Java](https://img.shields.io/badge/Java-8%2B-blue.svg)](https://www.java.com/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A powerful Fiji/ImageJ plugin that provides a persistent navigation window for precise coordinate jumping with zoom preservation, advanced position management, and visual center indication.
 
@@ -16,12 +15,26 @@ A powerful Fiji/ImageJ plugin that provides a persistent navigation window for p
 - **Mouse-Only Interface**: All interactions through mouse clicks (keyboard shortcuts disabled for better integration)
 
 ### Position Management
+- **Row Numbers**: Automatic row numbering for easy position reference
 - **Position List with Notes**: Save positions with optional notes for easy identification
 - **In-Table Editing**: Edit positions directly in the table with automatic validation
+- **Duplicate Detection**: Automatic warning when adding duplicate X,Y,Z,T positions with option to override
 - **Smart Position Adding**: Automatically fills first empty row instead of appending
-- **Sorting**: Click column headers to sort by position or note
+- **Sorting**: Click column headers to sort by position or note (row numbers maintained)
 - **Clear All**: Quick removal of all positions with confirmation dialog
 - **Auto-Rename on Export**: Prevents file overwrites by auto-numbering duplicates
+
+### Snapshot Feature (New)
+- **Batch Image Capture**: Take snapshots of all positions in your list with one click
+- **Customizable Area**: Set snapshot dimensions (default 200x200 pixels)
+- **Channel Selection**: Choose which channels to include in multi-channel images (Ch1-Ch4)
+- **Annotation Options**:
+  - Add position number and note as text overlay (yellow text, top-left)
+  - Include center crosshair marker (5px green cross)
+  - Horizontal flip option for reversed images
+- **Smart Naming**: Saves as `Position_001.png` or `Position_reverse_001.png` for flipped images
+- **Progress Tracking**: Real-time progress bar during batch processing
+- **Auto CSV Export**: Automatically saves positions.csv alongside snapshots
 
 ## 📦 Installation
 
@@ -45,10 +58,11 @@ A powerful Fiji/ImageJ plugin that provides a persistent navigation window for p
    - ✅ Right-click for context menu options
 
 ### Basic Navigation
-- Enter X,Y,Z,T coordinates in the compact input fields
+- Enter X,Y,Z,T coordinates in the compact input fields (uniform 3-character width)
 - Click "Go" button to navigate (Enter key disabled)
 - The view will center on the specified position while preserving zoom
 - Toggle "Show center +" to display/hide the green crosshair indicator
+- Compact window design optimized for screen space
 
 ### Position List Management
 
@@ -71,6 +85,7 @@ A powerful Fiji/ImageJ plugin that provides a persistent navigation window for p
 #### Managing the List
 - Select a position and click **"Remove"** to delete it from the list
 - Click **"Clear All"** to remove all positions (with confirmation)
+- Click **"Snapshot"** to capture images at all positions with custom settings
 - Click **"Export"** to save positions as TXT or CSV format
 - Click **"Load"** to import positions from TXT or CSV files
 - **Sort positions**: Click column headers to sort by position or note
@@ -80,6 +95,23 @@ A powerful Fiji/ImageJ plugin that provides a persistent navigation window for p
   - Perfect for copying data directly from spreadsheets
   - Format: One position per line with optional note
 
+### 📷 Using the Snapshot Feature
+
+The Snapshot feature allows you to automatically capture images at all saved positions:
+
+1. **Click "Snapshot"** button to open the settings dialog
+2. **Configure capture settings**:
+   - **Snapshot Area**: Set width and height (default 200x200 pixels)
+   - **Include center cross**: Adds a small green crosshair at center
+   - **Horizontal reverse**: Flips images horizontally
+   - **Annotation text**: Overlays position number and note on image
+   - **Channel Selection**: Choose which channels to include (Ch1-Ch4)
+3. **Click "Take Snapshots"** and select save directory
+4. **Images are saved as**:
+   - Normal: `Position_001.png`, `Position_002.png`, etc.
+   - Reversed: `Position_reverse_001.png`, `Position_reverse_002.png`, etc.
+5. **Automatic CSV export**: Saves `positions.csv` with all position data
+
 ### ✨ Key Features
 
 | Feature | Description |
@@ -87,11 +119,15 @@ A powerful Fiji/ImageJ plugin that provides a persistent navigation window for p
 | 🎯 **Smart Crosshair** | Green center indicator that scales with zoom |
 | 📝 **Position Notes** | Add descriptions to saved positions |
 | 🔄 **Real-time Updates** | 50ms refresh rate for smooth tracking |
+| 📷 **Batch Snapshots** | Capture all positions with custom settings |
+| 🏷️ **Row Numbers** | Automatic numbering for easy reference |
+| ⚠️ **Duplicate Warning** | Alerts when adding duplicate positions |
 | 💾 **Auto-save Names** | Never overwrite files - auto-adds (2), (3)... |
 | 📊 **CSV/TXT Export** | Full format support with headers |
 | 🖱️ **Mouse-Only Mode** | No keyboard shortcuts for better integration |
 | ⚡ **Instant Validation** | Immediate feedback on coordinate bounds |
 | 🔢 **Smart Sorting** | Click headers to sort by position or note |
+| 🖼️ **Annotation Text** | Add position number and notes to snapshots |
 
 ## ⚙️ Requirements
 
@@ -173,10 +209,6 @@ The plugin intelligently handles various formats:
 
 **Issue**: Can't paste positions
 - **Solution**: Use right-click context menu, not keyboard shortcuts
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🤝 Contributing
 

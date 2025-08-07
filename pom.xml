@@ -26,14 +26,6 @@
         <name>TTL</name>
     </organization>
 
-    <licenses>
-        <license>
-            <name>GNU General Public License v3+</name>
-            <url>https://www.gnu.org/licenses/gpl-3.0.txt</url>
-            <distribution>repo</distribution>
-        </license>
-    </licenses>
-
     <developers>
         <developer>
             <id>ttl</id>
@@ -72,8 +64,6 @@
     <properties>
         <package-name>com.github.ttl.dancenow</package-name>
         <main-class>com.github.ttl.dancenow.DanceNow</main-class>
-        <license.licenseName>gpl_v3</license.licenseName>
-        <license.copyrightOwners>TTL</license.copyrightOwners>
     </properties>
 
     <dependencies>

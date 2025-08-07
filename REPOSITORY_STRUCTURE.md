@@ -50,8 +50,6 @@ DanceNow/
 │
 ├── REPOSITORY_STRUCTURE.md              # This file - Repository organization
 │
-├── LICENSE                               # Project license file
-│
 └── test_positions.txt                    # Sample position data file
                                          # Format: X,Y,Z,T coordinates
 

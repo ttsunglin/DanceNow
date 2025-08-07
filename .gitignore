@@ -1,6 +1,6 @@
 # Build artifacts
-target/
-*.jar
+# target/  # Removed from gitignore to track compiled files
+#*.jar
 *.class
 
 # IDE files
