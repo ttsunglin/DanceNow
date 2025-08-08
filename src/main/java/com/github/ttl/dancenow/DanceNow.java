@@ -1711,6 +1711,8 @@ public class DanceNow implements PlugIn {
                 
                 // Process snapshots in background
                 SwingWorker<Void, Integer> worker = new SwingWorker<Void, Integer>() {
+                    private ImagePlus preprocessedImage = null;
+                    
                     @Override
                     protected Void doInBackground() throws Exception {
                         List<Position> validPositions = new ArrayList<>();
@@ -1720,23 +1722,39 @@ public class DanceNow implements PlugIn {
                             }
                         }
                         
-                        // Pre-calculate channel configuration to avoid repeated checks
-                        boolean[] activeChannels = null;
+                        // Pre-process channels ONCE if multi-channel
                         if (targetImage.getNChannels() > 1) {
-                            activeChannels = new boolean[targetImage.getNChannels()];
-                            for (int i = 0; i < channelCheckBoxes.length && i < activeChannels.length; i++) {
-                                activeChannels[i] = channelCheckBoxes[i].isSelected();
+                            // Store original mode if CompositeImage
+                            int originalMode = -1;
+                            if (targetImage instanceof CompositeImage) {
+                                CompositeImage comp = (CompositeImage) targetImage;
+                                originalMode = comp.getMode();
+                                
+                                // Set active channels for the entire snapshot session
+                                StringBuilder activeChannelString = new StringBuilder();
+                                for (int i = 0; i < comp.getNChannels(); i++) {
+                                    if (i < channelCheckBoxes.length && channelCheckBoxes[i].isSelected()) {
+                                        activeChannelString.append("1");
+                                    } else {
+                                        activeChannelString.append("0");
+                                    }
+                                }
+                                comp.setActiveChannels(activeChannelString.toString());
+                                comp.setMode(CompositeImage.COMPOSITE);
                             }
+                            
+                            // Store reference for fast processing
+                            preprocessedImage = targetImage;
                         }
                         
                         int total = validPositions.size();
                         for (int i = 0; i < total; i++) {
                             Position pos = validPositions.get(i);
                             
-                            // Take snapshot at this position
-                            captureSnapshot(pos, width, height, includeCrossCheckBox.isSelected(), 
+                            // Take snapshot at this position using preprocessed image
+                            captureSnapshotOptimized(pos, width, height, includeCrossCheckBox.isSelected(), 
                                           horizontalReverseCheckBox.isSelected(), annotationTextCheckBox.isSelected(),
-                                          channelCheckBoxes, saveDir, i + 1);
+                                          saveDir, i + 1, preprocessedImage);
                             
                             publish((int)((i + 1) * 100.0 / total));
                         }
@@ -1776,12 +1794,15 @@ public class DanceNow implements PlugIn {
                 worker.execute();
             }
             
-            private void captureSnapshot(Position pos, int width, int height, boolean includeCross,
+            private void captureSnapshotOptimized(Position pos, int width, int height, boolean includeCross,
                                         boolean horizontalReverse, boolean includeAnnotation, 
-                                        JCheckBox[] channels, File saveDir, int index) {
+                                        File saveDir, int index, ImagePlus processedImage) {
+                // Use preprocessed image if available, otherwise use original
+                ImagePlus workingImage = (processedImage != null) ? processedImage : targetImage;
+                
                 // Navigate to the position
-                targetImage.setZ(pos.z);
-                targetImage.setT(pos.t);
+                workingImage.setZ(pos.z);
+                workingImage.setT(pos.t);
                 
                 // Calculate ROI bounds centered on position
                 int x = pos.x - width / 2;
@@ -1793,31 +1814,31 @@ public class DanceNow implements PlugIn {
                 y = Math.max(0, y);
                 
                 // Then, adjust width and height if they exceed image bounds
-                int actualWidth = Math.min(width, targetImage.getWidth() - x);
-                int actualHeight = Math.min(height, targetImage.getHeight() - y);
+                int actualWidth = Math.min(width, workingImage.getWidth() - x);
+                int actualHeight = Math.min(height, workingImage.getHeight() - y);
                 
                 // If the requested size is larger than the image, adjust to fit
                 if (actualWidth <= 0 || actualHeight <= 0) {
                     // This shouldn't happen, but handle gracefully
-                    actualWidth = Math.min(width, targetImage.getWidth());
-                    actualHeight = Math.min(height, targetImage.getHeight());
+                    actualWidth = Math.min(width, workingImage.getWidth());
+                    actualHeight = Math.min(height, workingImage.getHeight());
                     x = Math.max(0, pos.x - actualWidth / 2);
                     y = Math.max(0, pos.y - actualHeight / 2);
-                    x = Math.min(x, targetImage.getWidth() - actualWidth);
-                    y = Math.min(y, targetImage.getHeight() - actualHeight);
+                    x = Math.min(x, workingImage.getWidth() - actualWidth);
+                    y = Math.min(y, workingImage.getHeight() - actualHeight);
                 }
                 
                 // Set ROI with adjusted bounds
                 Roi roi = new Roi(x, y, actualWidth, actualHeight);
-                targetImage.setRoi(roi);
+                workingImage.setRoi(roi);
                 
                 // Crop and duplicate
-                ImagePlus cropped = targetImage.crop("snapshot");
+                ImagePlus cropped = workingImage.crop("snapshot");
                 
-                // Process channels if multi-channel
-                if (targetImage.getNChannels() > 1) {
-                    // Optimize: use direct channel manipulation instead of splitting/merging
-                    cropped = createOptimizedChannelImage(cropped, channels);
+                // For multi-channel images that are already preprocessed, just flatten
+                if (workingImage.getNChannels() > 1 && workingImage instanceof CompositeImage) {
+                    CompositeImage comp = (CompositeImage) cropped;
+                    cropped = comp.flatten();
                 }
                 
                 // Create overlay for cross and/or annotation
@@ -1887,7 +1908,18 @@ public class DanceNow implements PlugIn {
                 IJ.save(cropped, outputFile.getAbsolutePath());
                 
                 // Clear ROI
-                targetImage.deleteRoi();
+                workingImage.deleteRoi();
+            }
+            
+            // Keep the old method for backwards compatibility but mark as deprecated
+            @Deprecated
+            private void captureSnapshot(Position pos, int width, int height, boolean includeCross,
+                                        boolean horizontalReverse, boolean includeAnnotation, 
+                                        JCheckBox[] channels, File saveDir, int index) {
+                // This method is kept for compatibility but not used in optimized flow
+                captureSnapshotOptimized(pos, width, height, includeCross, 
+                                       horizontalReverse, includeAnnotation, 
+                                       saveDir, index, null);
             }
             
             private ImagePlus createOptimizedChannelImage(ImagePlus imp, JCheckBox[] channelBoxes) {
