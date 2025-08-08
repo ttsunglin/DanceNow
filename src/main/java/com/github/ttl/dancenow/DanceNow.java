@@ -1720,6 +1720,15 @@ public class DanceNow implements PlugIn {
                             }
                         }
                         
+                        // Pre-calculate channel configuration to avoid repeated checks
+                        boolean[] activeChannels = null;
+                        if (targetImage.getNChannels() > 1) {
+                            activeChannels = new boolean[targetImage.getNChannels()];
+                            for (int i = 0; i < channelCheckBoxes.length && i < activeChannels.length; i++) {
+                                activeChannels[i] = channelCheckBoxes[i].isSelected();
+                            }
+                        }
+                        
                         int total = validPositions.size();
                         for (int i = 0; i < total; i++) {
                             Position pos = validPositions.get(i);
@@ -1774,16 +1783,32 @@ public class DanceNow implements PlugIn {
                 targetImage.setZ(pos.z);
                 targetImage.setT(pos.t);
                 
-                // Calculate ROI bounds
+                // Calculate ROI bounds centered on position
                 int x = pos.x - width / 2;
                 int y = pos.y - height / 2;
                 
-                // Ensure bounds are within image
-                x = Math.max(0, Math.min(x, targetImage.getWidth() - width));
-                y = Math.max(0, Math.min(y, targetImage.getHeight() - height));
+                // Ensure the ROI fits within image bounds
+                // First, clamp the top-left corner
+                x = Math.max(0, x);
+                y = Math.max(0, y);
                 
-                // Set ROI
-                Roi roi = new Roi(x, y, width, height);
+                // Then, adjust width and height if they exceed image bounds
+                int actualWidth = Math.min(width, targetImage.getWidth() - x);
+                int actualHeight = Math.min(height, targetImage.getHeight() - y);
+                
+                // If the requested size is larger than the image, adjust to fit
+                if (actualWidth <= 0 || actualHeight <= 0) {
+                    // This shouldn't happen, but handle gracefully
+                    actualWidth = Math.min(width, targetImage.getWidth());
+                    actualHeight = Math.min(height, targetImage.getHeight());
+                    x = Math.max(0, pos.x - actualWidth / 2);
+                    y = Math.max(0, pos.y - actualHeight / 2);
+                    x = Math.min(x, targetImage.getWidth() - actualWidth);
+                    y = Math.min(y, targetImage.getHeight() - actualHeight);
+                }
+                
+                // Set ROI with adjusted bounds
+                Roi roi = new Roi(x, y, actualWidth, actualHeight);
                 targetImage.setRoi(roi);
                 
                 // Crop and duplicate
@@ -1791,11 +1816,8 @@ public class DanceNow implements PlugIn {
                 
                 // Process channels if multi-channel
                 if (targetImage.getNChannels() > 1) {
-                    // Create composite image with selected channels
-                    ImagePlus mergedImage = mergeSelectedChannels(cropped, channels);
-                    if (mergedImage != null) {
-                        cropped = mergedImage;
-                    }
+                    // Optimize: use direct channel manipulation instead of splitting/merging
+                    cropped = createOptimizedChannelImage(cropped, channels);
                 }
                 
                 // Create overlay for cross and/or annotation
@@ -1805,8 +1827,9 @@ public class DanceNow implements PlugIn {
                 // Add cross if requested
                 if (includeCross) {
                     if (overlay == null) overlay = new Overlay();
-                    int centerX = width / 2;
-                    int centerY = height / 2;
+                    // Use actual cropped dimensions for center calculation
+                    int centerX = cropped.getWidth() / 2;
+                    int centerY = cropped.getHeight() / 2;
                     
                     Line hLine = new Line(centerX - 5, centerY, centerX + 5, centerY);
                     hLine.setStrokeColor(Color.GREEN);
@@ -1867,40 +1890,48 @@ public class DanceNow implements PlugIn {
                 targetImage.deleteRoi();
             }
             
-            private ImagePlus mergeSelectedChannels(ImagePlus imp, JCheckBox[] channelBoxes) {
+            private ImagePlus createOptimizedChannelImage(ImagePlus imp, JCheckBox[] channelBoxes) {
                 if (imp.getNChannels() == 1) {
                     return imp;
                 }
                 
-                // Split channels
+                // For composite images, directly manipulate channel visibility
+                if (imp instanceof CompositeImage) {
+                    CompositeImage comp = (CompositeImage) imp.duplicate();
+                    
+                    // Set active channels based on selection using string format
+                    // CompositeImage.setActiveChannels expects a string like "1101" for channels
+                    StringBuilder activeChannelString = new StringBuilder();
+                    for (int i = 0; i < comp.getNChannels(); i++) {
+                        if (i < channelBoxes.length && channelBoxes[i].isSelected()) {
+                            activeChannelString.append("1");
+                        } else {
+                            activeChannelString.append("0");
+                        }
+                    }
+                    comp.setActiveChannels(activeChannelString.toString());
+                    
+                    // Set composite mode and flatten to RGB
+                    comp.setMode(CompositeImage.COMPOSITE);
+                    return comp.flatten();
+                }
+                
+                // Fallback for non-composite multi-channel images
+                // Only split/merge if absolutely necessary
                 ImagePlus[] channels = ChannelSplitter.split(imp);
                 ImagePlus[] selectedChannels = new ImagePlus[channels.length];
                 
-                // Keep only selected channels
+                boolean hasSelection = false;
                 for (int i = 0; i < channelBoxes.length && i < channels.length; i++) {
                     if (channelBoxes[i].isSelected()) {
                         selectedChannels[i] = channels[i];
+                        hasSelection = true;
                     }
                 }
                 
-                // Merge selected channels
-                if (imp instanceof CompositeImage) {
-                    CompositeImage comp = (CompositeImage) imp;
-                    ImagePlus merged = RGBStackMerge.mergeChannels(selectedChannels, false);
-                    
-                    // Apply original LUTs and display settings
-                    if (merged instanceof CompositeImage) {
-                        CompositeImage mergedComp = (CompositeImage) merged;
-                        for (int i = 0; i < channelBoxes.length && i < channels.length; i++) {
-                            if (channelBoxes[i].isSelected() && selectedChannels[i] != null) {
-                                mergedComp.setChannelLut(comp.getChannelLut(i + 1), i + 1);
-                                mergedComp.setDisplayRange(comp.getDisplayRangeMin(), 
-                                                         comp.getDisplayRangeMax(), i + 1);
-                            }
-                        }
-                        mergedComp.setMode(CompositeImage.COMPOSITE);
-                        return mergedComp.flatten();
-                    }
+                if (!hasSelection) {
+                    // No channels selected, return original
+                    return imp;
                 }
                 
                 return RGBStackMerge.mergeChannels(selectedChannels, true);

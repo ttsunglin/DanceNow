@@ -61,9 +61,17 @@
         <system>None</system>
     </ciManagement>
 
+    <licenses>
+        <license>
+            <name>None</name>
+        </license>
+    </licenses>
+
     <properties>
         <package-name>com.github.ttl.dancenow</package-name>
         <main-class>com.github.ttl.dancenow.DanceNow</main-class>
+        <license.licenseName>None</license.licenseName>
+        <license.copyrightOwners>TTL</license.copyrightOwners>
     </properties>
 
     <dependencies>
