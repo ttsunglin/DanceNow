@@ -63,7 +63,7 @@ public class DanceNow implements PlugIn {
         private boolean isUpdatingTable = false; // Flag to prevent infinite recursion
         private boolean sortAscending = true; // Track sort direction
         private Overlay crosshairOverlay; // Overlay for center crosshair
-        private boolean showCrosshair = true; // Toggle for crosshair visibility
+        private boolean showCrosshair = false; // Toggle for crosshair visibility (default off)
         private ImageWindow lastImageWindow; // Track last image window for cleanup
         private MouseMotionListener crosshairMouseListener; // Mouse listener for crosshair
         private MouseWheelListener crosshairWheelListener; // Wheel listener for crosshair
