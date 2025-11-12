@@ -64,6 +64,9 @@ public class DanceNow implements PlugIn {
         private boolean sortAscending = true; // Track sort direction
         private Overlay crosshairOverlay; // Overlay for center crosshair
         private boolean showCrosshair = false; // Toggle for crosshair visibility (default off)
+        private Overlay originalOverlay; // Store original overlay before adding crosshair
+        private Line crosshairHLine; // Horizontal crosshair line ROI
+        private Line crosshairVLine; // Vertical crosshair line ROI
         private ImageWindow lastImageWindow; // Track last image window for cleanup
         private MouseMotionListener crosshairMouseListener; // Mouse listener for crosshair
         private MouseWheelListener crosshairWheelListener; // Wheel listener for crosshair
@@ -125,11 +128,25 @@ public class DanceNow implements PlugIn {
                             lastImageWindow.getCanvas().removeMouseWheelListener(crosshairWheelListener);
                         }
                     }
-                    
-                    // Remove crosshair overlay when hiding window
+
+                    // Remove crosshair but restore original overlay (preserves TrackMate tracks)
                     ImagePlus imp = WindowManager.getCurrentImage();
                     if (imp != null && crosshairOverlay != null) {
-                        imp.setOverlay(null);
+                        // Remove crosshair lines from current overlay
+                        Overlay currentOverlay = imp.getOverlay();
+                        if (currentOverlay != null && crosshairHLine != null && crosshairVLine != null) {
+                            currentOverlay.remove(crosshairHLine);
+                            currentOverlay.remove(crosshairVLine);
+                        }
+
+                        // Restore original overlay (or set to null if there was none)
+                        imp.setOverlay(originalOverlay);
+
+                        // Clear references
+                        originalOverlay = null;
+                        crosshairHLine = null;
+                        crosshairVLine = null;
+                        crosshairOverlay = null;
                     }
                 }
             });
@@ -266,10 +283,24 @@ public class DanceNow implements PlugIn {
             crosshairToggle.addActionListener(e -> {
                 showCrosshair = crosshairToggle.isSelected();
                 if (!showCrosshair) {
-                    // Remove crosshair overlay when disabled
+                    // Remove crosshair but restore original overlay (preserves TrackMate tracks)
                     ImagePlus imp = WindowManager.getCurrentImage();
                     if (imp != null) {
-                        imp.setOverlay(null);
+                        // Remove crosshair lines from current overlay
+                        Overlay currentOverlay = imp.getOverlay();
+                        if (currentOverlay != null && crosshairHLine != null && crosshairVLine != null) {
+                            currentOverlay.remove(crosshairHLine);
+                            currentOverlay.remove(crosshairVLine);
+                        }
+
+                        // Restore original overlay (or set to null if there was none)
+                        imp.setOverlay(originalOverlay);
+
+                        // Clear references
+                        originalOverlay = null;
+                        crosshairHLine = null;
+                        crosshairVLine = null;
+                        crosshairOverlay = null;
                     }
                 } else {
                     // Update crosshair when enabled
@@ -687,7 +718,7 @@ public class DanceNow implements PlugIn {
         
         private void updateCrosshairOverlay() {
             if (!showCrosshair) return;
-            
+
             ImagePlus imp = WindowManager.getCurrentImage();
             if (imp != null) {
                 ImageWindow win = imp.getWindow();
@@ -695,41 +726,59 @@ public class DanceNow implements PlugIn {
                     ImageCanvas canvas = win.getCanvas();
                     Rectangle srcRect = canvas.getSrcRect();
                     double mag = canvas.getMagnification();
-                    
+
                     // Calculate the center of the current view in image coordinates
                     int centerX = srcRect.x + srcRect.width / 2;
                     int centerY = srcRect.y + srcRect.height / 2;
-                    
-                    // Create or update the overlay
-                    if (crosshairOverlay == null) {
-                        crosshairOverlay = new Overlay();
-                    } else {
-                        crosshairOverlay.clear();
+
+                    // Save original overlay if we haven't already (preserves TrackMate tracks)
+                    if (originalOverlay == null) {
+                        Overlay existingOverlay = imp.getOverlay();
+                        if (existingOverlay != null) {
+                            // Duplicate the overlay to preserve it
+                            originalOverlay = existingOverlay.duplicate();
+                        }
                     }
-                    
+
+                    // Get current overlay or create new one
+                    Overlay currentOverlay = imp.getOverlay();
+                    if (currentOverlay == null) {
+                        currentOverlay = new Overlay();
+                    } else {
+                        // Remove old crosshair lines if they exist
+                        if (crosshairHLine != null) {
+                            currentOverlay.remove(crosshairHLine);
+                        }
+                        if (crosshairVLine != null) {
+                            currentOverlay.remove(crosshairVLine);
+                        }
+                    }
+
                     // Calculate crosshair size that remains constant on screen
                     // The crosshair size should be smaller when zoomed in (larger mag)
                     int baseSize = 5; // Base size in image pixels at 1:1 zoom (reduced from 15)
                     double crosshairSize = baseSize / Math.sqrt(mag); // Scale inversely with zoom
-                    
+
                     // Ensure minimum size
                     crosshairSize = Math.max(2, crosshairSize);
-                    
-                    // Horizontal line
-                    Line hLine = new Line(centerX - crosshairSize, centerY, 
-                                          centerX + crosshairSize, centerY);
-                    hLine.setStrokeColor(Color.GREEN);
-                    hLine.setStrokeWidth(Math.max(1, Math.min(2, 1.5 / Math.sqrt(mag)))); // Thinner stroke for smaller crosshair
-                    crosshairOverlay.add(hLine);
-                    
-                    // Vertical line
-                    Line vLine = new Line(centerX, centerY - crosshairSize, 
-                                          centerX, centerY + crosshairSize);
-                    vLine.setStrokeColor(Color.GREEN);
-                    vLine.setStrokeWidth(Math.max(1, Math.min(2, 1.5 / Math.sqrt(mag)))); // Thinner stroke for smaller crosshair
-                    crosshairOverlay.add(vLine);
-                    
-                    // Apply the overlay to the image
+
+                    // Create new crosshair lines
+                    crosshairHLine = new Line(centerX - crosshairSize, centerY,
+                                              centerX + crosshairSize, centerY);
+                    crosshairHLine.setStrokeColor(Color.decode("#FF00FF"));
+                    crosshairHLine.setStrokeWidth(Math.max(1, Math.min(2, 1.5 / Math.sqrt(mag)))); // Thinner stroke for smaller crosshair
+
+                    crosshairVLine = new Line(centerX, centerY - crosshairSize,
+                                              centerX, centerY + crosshairSize);
+                    crosshairVLine.setStrokeColor(Color.decode("#FF00FF"));
+                    crosshairVLine.setStrokeWidth(Math.max(1, Math.min(2, 1.5 / Math.sqrt(mag)))); // Thinner stroke for smaller crosshair
+
+                    // Add crosshair lines to the overlay
+                    currentOverlay.add(crosshairHLine);
+                    currentOverlay.add(crosshairVLine);
+
+                    // Store reference and apply the merged overlay to the image
+                    crosshairOverlay = currentOverlay;
                     imp.setOverlay(crosshairOverlay);
                 }
             }
@@ -1851,14 +1900,14 @@ public class DanceNow implements PlugIn {
                     // Use actual cropped dimensions for center calculation
                     int centerX = cropped.getWidth() / 2;
                     int centerY = cropped.getHeight() / 2;
-                    
+
                     Line hLine = new Line(centerX - 5, centerY, centerX + 5, centerY);
-                    hLine.setStrokeColor(Color.GREEN);
+                    hLine.setStrokeColor(Color.decode("#FF00FF"));
                     hLine.setStrokeWidth(1);
                     overlay.add(hLine);
-                    
+
                     Line vLine = new Line(centerX, centerY - 5, centerX, centerY + 5);
-                    vLine.setStrokeColor(Color.GREEN);
+                    vLine.setStrokeColor(Color.decode("#FF00FF"));
                     vLine.setStrokeWidth(1);
                     overlay.add(vLine);
                     needsFlattening = true;
@@ -1994,7 +2043,7 @@ public class DanceNow implements PlugIn {
             if (updateTimer != null) {
                 updateTimer.cancel();
             }
-            
+
             // Remove mouse listeners from image window
             if (lastImageWindow != null && lastImageWindow.getCanvas() != null) {
                 if (crosshairMouseListener != null) {
@@ -2004,11 +2053,25 @@ public class DanceNow implements PlugIn {
                     lastImageWindow.getCanvas().removeMouseWheelListener(crosshairWheelListener);
                 }
             }
-            
-            // Remove crosshair overlay when closing
+
+            // Remove crosshair but restore original overlay (preserves TrackMate tracks)
             ImagePlus imp = WindowManager.getCurrentImage();
             if (imp != null && crosshairOverlay != null) {
-                imp.setOverlay(null);
+                // Remove crosshair lines from current overlay
+                Overlay currentOverlay = imp.getOverlay();
+                if (currentOverlay != null && crosshairHLine != null && crosshairVLine != null) {
+                    currentOverlay.remove(crosshairHLine);
+                    currentOverlay.remove(crosshairVLine);
+                }
+
+                // Restore original overlay (or set to null if there was none)
+                imp.setOverlay(originalOverlay);
+
+                // Clear references
+                originalOverlay = null;
+                crosshairHLine = null;
+                crosshairVLine = null;
+                crosshairOverlay = null;
             }
             super.dispose();
         }
